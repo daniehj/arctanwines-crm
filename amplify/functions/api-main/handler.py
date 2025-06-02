@@ -51,26 +51,37 @@ def get_ssm_parameter(parameter_name):
     """Get SSM parameter with detailed error handling"""
     env, env_info = get_environment()
     
-    # Try environment-specific parameter first
-    env_param = f"/arctan-wines/{env}/{parameter_name}"
+    # Try environment-specific parameter first with Amplify prefix
+    env_param = f"/amplify/{env}/{parameter_name}"
     try:
         response = ssm_client.get_parameter(Name=env_param, WithDecryption=True)
         return response['Parameter']['Value']
     except Exception as e1:
-        # Try generic parameter
-        generic_param = f"/arctan-wines/{parameter_name}"
+        # Try generic parameter with Amplify prefix
+        generic_param = f"/amplify/{parameter_name}"
         try:
             response = ssm_client.get_parameter(Name=generic_param, WithDecryption=True)
             return response['Parameter']['Value']
         except Exception as e2:
-            # Try environment variable fallback
-            env_var = parameter_name.upper().replace('-', '_').replace('/', '_')
-            env_value = os.environ.get(env_var)
-            if env_value:
-                return env_value
-            
-            # Return detailed error
-            raise Exception(f"Parameter {parameter_name} not found. Tried: {env_param} ({str(e1)}), {generic_param} ({str(e2)}), env var {env_var} (not set). Environment: {env}, Info: {env_info}")
+            # Try old arctan-wines paths as fallback
+            old_env_param = f"/arctan-wines/{env}/{parameter_name}"
+            try:
+                response = ssm_client.get_parameter(Name=old_env_param, WithDecryption=True)
+                return response['Parameter']['Value']
+            except Exception as e3:
+                old_generic_param = f"/arctan-wines/{parameter_name}"
+                try:
+                    response = ssm_client.get_parameter(Name=old_generic_param, WithDecryption=True)
+                    return response['Parameter']['Value']
+                except Exception as e4:
+                    # Try environment variable fallback
+                    env_var = parameter_name.upper().replace('-', '_').replace('/', '_')
+                    env_value = os.environ.get(env_var)
+                    if env_value:
+                        return env_value
+                    
+                    # Return detailed error
+                    raise Exception(f"Parameter {parameter_name} not found. Tried: {env_param} ({str(e1)}), {generic_param} ({str(e2)}), {old_env_param} ({str(e3)}), {old_generic_param} ({str(e4)}), env var {env_var} (not set). Environment: {env}, Info: {env_info}")
 
 def get_database_password():
     """Get database password from Secrets Manager"""
