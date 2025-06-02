@@ -1,9 +1,11 @@
-import { defineFunction } from "@aws-amplify/backend";
-import { Duration } from "aws-cdk-lib";
-import { Function, Runtime, Code } from "aws-cdk-lib/aws-lambda";
-import { PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { execSync } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { defineFunction } from "@aws-amplify/backend";
+import { DockerImage, Duration } from "aws-cdk-lib";
+import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
+import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
+import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 
 const functionDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,12 +14,28 @@ export const apiMainFunction = defineFunction(
     // Create the FastAPI Lambda function
     const lambdaFunction = new Function(scope, "api-main", {
       handler: "handler.handler",
-      runtime: Runtime.PYTHON_3_9,
-      timeout: Duration.seconds(30),
+      runtime: Runtime.PYTHON_3_12,
+      timeout: Duration.seconds(300),
       memorySize: 1024,
-      code: Code.fromAsset(functionDir),
+      code: Code.fromAsset(functionDir, {
+        bundling: {
+          image: DockerImage.fromRegistry("dummy"),
+          local: {
+            tryBundle(outputDir: string) {
+              // Install dependencies with platform targeting for Lambda
+              execSync(
+                `python3 -m pip install -r ${path.join(functionDir, "requirements.txt")} -t ${path.join(outputDir)} --platform manylinux2014_x86_64 --only-binary=:all:`
+              );
+              // Copy source files
+              execSync(`cp -r ${functionDir}/*.py ${path.join(outputDir)}`);
+              return true;
+            },
+          },
+        },
+      }),
       environment: {
-        // These will be set via SSM Parameter Store or environment
+        ENVIRONMENT: "production",
+        PYTHONPATH: "/var/task"
       }
     });
 
@@ -42,6 +60,20 @@ export const apiMainFunction = defineFunction(
       resources: ["*"]
     }));
 
+    // Create an API Gateway for HTTP access
+    const api = new LambdaRestApi(scope, "api-main-gateway", {
+      handler: lambdaFunction,
+      proxy: true,
+      defaultCorsPreflightOptions: {
+        allowOrigins: ["*"],
+        allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowHeaders: ["*"]
+      }
+    });
+
     return lambdaFunction;
+  },
+  {
+    resourceGroupName: "api-main"
   }
 ); 

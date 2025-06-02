@@ -1,15 +1,14 @@
 import json
 import os
-from typing import Optional, AsyncGenerator
+from typing import Optional, Generator
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 import jwt
 import boto3
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
-import asyncio
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -57,7 +56,7 @@ def get_environment() -> str:
     # Default to production
     return 'prod'
 
-async def get_ssm_parameter(parameter_name: str) -> str:
+def get_ssm_parameter(parameter_name: str) -> str:
     """Get parameter from AWS SSM Parameter Store with environment awareness"""
     env = get_environment()
     
@@ -87,53 +86,49 @@ async def get_ssm_parameter(parameter_name: str) -> str:
         env_var_name = f"{parameter_name.upper().replace('-', '_')}"
         return os.environ.get(env_var_name)
 
-async def init_database():
+def init_database():
     """Initialize database connection"""
     global engine, SessionLocal
     
     if engine is None:
         # Get database configuration from SSM (environment-aware)
-        db_host = await get_ssm_parameter("db-host")
-        db_port = await get_ssm_parameter("db-port") or "5432"
-        db_name = await get_ssm_parameter("db-name")
-        db_user = await get_ssm_parameter("db-user")
-        db_password = await get_ssm_parameter("db-password")
+        db_host = get_ssm_parameter("database/host")
+        db_port = get_ssm_parameter("database/port") or "5432"
+        db_name = get_ssm_parameter("database/name")
+        db_user = get_ssm_parameter("database/user")
+        db_password = get_ssm_parameter("database/password")
         
         if not all([db_host, db_name, db_user, db_password]):
             raise Exception("Missing required database configuration parameters")
         
-        # Create async database URL
-        database_url = f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        # Create database URL using pg8000 (pure Python PostgreSQL driver)
+        database_url = f"postgresql+pg8000://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         
-        engine = create_async_engine(database_url, echo=False)
-        SessionLocal = async_sessionmaker(
-            bind=engine,
-            class_=AsyncSession,
-            expire_on_commit=False
-        )
+        engine = create_engine(database_url, echo=False)
+        SessionLocal = sessionmaker(bind=engine)
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+def get_db() -> Generator[Session, None, None]:
     """Database dependency"""
-    await init_database()
-    async with SessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+    init_database()
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-async def get_cognito_config():
+def get_cognito_config():
     """Get Cognito configuration from SSM or environment"""
     user_pool_id = (
-        await get_ssm_parameter("cognito-user-pool-id") or 
+        get_ssm_parameter("cognito-user-pool-id") or 
         os.environ.get('AMPLIFY_AUTH_USERPOOL_ID')
     )
     app_client_id = (
-        await get_ssm_parameter("cognito-app-client-id") or 
+        get_ssm_parameter("cognito-app-client-id") or 
         os.environ.get('AMPLIFY_AUTH_USERPOOL_WEB_CLIENT_ID')
     )
     return user_pool_id, app_client_id
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Validate JWT token from Cognito and extract user information
     """
@@ -169,7 +164,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 # Health check endpoint
 @app.get("/health")
-async def health_check():
+def health_check():
     env = get_environment()
     return {
         "status": "healthy", 
@@ -179,14 +174,14 @@ async def health_check():
 
 # Database test endpoint
 @app.get("/db-test")
-async def db_test(db: AsyncSession = Depends(get_db)):
+def db_test(db: Session = Depends(get_db)):
     try:
         # Test database connection
-        result = await db.execute("SELECT 1")
+        result = db.execute(text("SELECT 1")).scalar()
         env = get_environment()
         return {
             "status": "database connected", 
-            "result": result.scalar(),
+            "result": result,
             "environment": env
         }
     except Exception as e:
@@ -197,38 +192,53 @@ async def db_test(db: AsyncSession = Depends(get_db)):
 
 # Test protected endpoint
 @app.get("/me")
-async def get_me(current_user: dict = Depends(get_current_user)):
+def get_me(current_user: dict = Depends(get_current_user)):
+    """Get current user information"""
     return {
-        "user": current_user,
         "message": "Authentication successful",
+        "user": current_user,
         "environment": get_environment()
     }
 
-# API v1 routes will be added here
-@app.get("/api/v1/test")
-async def test_endpoint(current_user: dict = Depends(get_current_user)):
+# Users endpoints (placeholder for testing)
+@app.get("/api/v1/users")
+def get_users(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get list of users - placeholder endpoint"""
     return {
-        "message": "API v1 is working",
-        "user": current_user['email'],
-        "role": current_user.get('role'),
-        "environment": get_environment()
+        "users": [],
+        "message": "Users endpoint working",
+        "environment": get_environment(),
+        "authenticated_user": current_user['email']
+    }
+
+@app.get("/api/v1/users/{user_id}")
+def get_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Get specific user - placeholder endpoint"""
+    return {
+        "user_id": user_id,
+        "message": f"User {user_id} endpoint working",
+        "environment": get_environment(),
+        "authenticated_user": current_user['email']
+    }
+
+# Test endpoint (no auth required)
+@app.get("/api/v1/test")
+def test_endpoint():
+    """Test endpoint without authentication"""
+    return {
+        "message": "Test endpoint working",
+        "environment": get_environment(),
+        "status": "success"
     }
 
 # Configuration endpoint
 @app.get("/api/v1/config")
-async def get_config(current_user: dict = Depends(get_current_user)):
-    """Get configuration information for debugging"""
-    user_pool_id, app_client_id = await get_cognito_config()
-    env = get_environment()
+def get_config(current_user: dict = Depends(get_current_user)):
+    """Get API configuration"""
     return {
-        "environment": env,
-        "cognito_user_pool_id": user_pool_id,
-        "cognito_app_client_id": app_client_id,
-        "aws_region": os.environ.get('AWS_REGION'),
-        "amplify_env": os.environ.get('AMPLIFY_ENV'),
-        "aws_branch": os.environ.get('AWS_BRANCH'),
-        "function_name": os.environ.get('AWS_LAMBDA_FUNCTION_NAME'),
-        "user": current_user
+        "environment": get_environment(),
+        "user": current_user,
+        "message": "Configuration retrieved successfully"
     }
 
 # Lambda handler
