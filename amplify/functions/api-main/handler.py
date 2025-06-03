@@ -52,47 +52,58 @@ def get_ssm_parameter(parameter_name):
     env, env_info = get_environment()
     
     # Try environment-specific parameter first with correct Amplify + project prefix
-    env_param = f"/amplify/arctan-wines/{env}/{parameter_name}"
+    env_param = f"/amplify/arctanwines/{env}/{parameter_name}"
     try:
         response = ssm_client.get_parameter(Name=env_param, WithDecryption=True)
         return response['Parameter']['Value']
     except Exception as e1:
         # Try generic parameter with Amplify + project prefix
-        generic_param = f"/amplify/arctan-wines/{parameter_name}"
+        generic_param = f"/amplify/arctanwines/{parameter_name}"
         try:
             response = ssm_client.get_parameter(Name=generic_param, WithDecryption=True)
             return response['Parameter']['Value']
         except Exception as e2:
-            # Try just Amplify prefix as fallback
-            amplify_env_param = f"/amplify/{env}/{parameter_name}"
+            # Try with hyphen fallback
+            env_hyphen_param = f"/amplify/arctan-wines/{env}/{parameter_name}"
             try:
-                response = ssm_client.get_parameter(Name=amplify_env_param, WithDecryption=True)
+                response = ssm_client.get_parameter(Name=env_hyphen_param, WithDecryption=True)
                 return response['Parameter']['Value']
             except Exception as e3:
-                amplify_generic_param = f"/amplify/{parameter_name}"
+                generic_hyphen_param = f"/amplify/arctan-wines/{parameter_name}"
                 try:
-                    response = ssm_client.get_parameter(Name=amplify_generic_param, WithDecryption=True)
+                    response = ssm_client.get_parameter(Name=generic_hyphen_param, WithDecryption=True)
                     return response['Parameter']['Value']
                 except Exception as e4:
-                    # Try old arctan-wines paths as fallback
-                    old_env_param = f"/arctan-wines/{env}/{parameter_name}"
+                    # Try just Amplify prefix as fallback
+                    amplify_env_param = f"/amplify/{env}/{parameter_name}"
                     try:
-                        response = ssm_client.get_parameter(Name=old_env_param, WithDecryption=True)
+                        response = ssm_client.get_parameter(Name=amplify_env_param, WithDecryption=True)
                         return response['Parameter']['Value']
                     except Exception as e5:
-                        old_generic_param = f"/arctan-wines/{parameter_name}"
+                        amplify_generic_param = f"/amplify/{parameter_name}"
                         try:
-                            response = ssm_client.get_parameter(Name=old_generic_param, WithDecryption=True)
+                            response = ssm_client.get_parameter(Name=amplify_generic_param, WithDecryption=True)
                             return response['Parameter']['Value']
                         except Exception as e6:
-                            # Try environment variable fallback
-                            env_var = parameter_name.upper().replace('-', '_').replace('/', '_')
-                            env_value = os.environ.get(env_var)
-                            if env_value:
-                                return env_value
-                            
-                            # Return detailed error
-                            raise Exception(f"Parameter {parameter_name} not found. Tried: {env_param} ({str(e1)}), {generic_param} ({str(e2)}), {amplify_env_param} ({str(e3)}), {amplify_generic_param} ({str(e4)}), {old_env_param} ({str(e5)}), {old_generic_param} ({str(e6)}), env var {env_var} (not set). Environment: {env}, Info: {env_info}")
+                            # Try old arctan-wines paths as fallback
+                            old_env_param = f"/arctan-wines/{env}/{parameter_name}"
+                            try:
+                                response = ssm_client.get_parameter(Name=old_env_param, WithDecryption=True)
+                                return response['Parameter']['Value']
+                            except Exception as e7:
+                                old_generic_param = f"/arctan-wines/{parameter_name}"
+                                try:
+                                    response = ssm_client.get_parameter(Name=old_generic_param, WithDecryption=True)
+                                    return response['Parameter']['Value']
+                                except Exception as e8:
+                                    # Try environment variable fallback
+                                    env_var = parameter_name.upper().replace('-', '_').replace('/', '_')
+                                    env_value = os.environ.get(env_var)
+                                    if env_value:
+                                        return env_value
+                                    
+                                    # Return detailed error
+                                    raise Exception(f"Parameter {parameter_name} not found. Tried: {env_param} ({str(e1)}), {generic_param} ({str(e2)}), {env_hyphen_param} ({str(e3)}), {generic_hyphen_param} ({str(e4)}), {amplify_env_param} ({str(e5)}), {amplify_generic_param} ({str(e6)}), {old_env_param} ({str(e7)}), {old_generic_param} ({str(e8)}), env var {env_var} (not set). Environment: {env}, Info: {env_info}")
 
 def get_database_password():
     """Get database password from Secrets Manager"""
@@ -119,14 +130,14 @@ def init_database():
             db_host = get_ssm_parameter("database/host")
             db_port = get_ssm_parameter("database/port") or "5432"
             db_name = get_ssm_parameter("database/name")
-            db_user = get_ssm_parameter("database/user")
+            db_user = get_ssm_parameter("database/username")
             db_password = get_database_password()
             
             if not all([db_host, db_name, db_user, db_password]):
                 missing = []
                 if not db_host: missing.append("host")
                 if not db_name: missing.append("name")
-                if not db_user: missing.append("user")
+                if not db_user: missing.append("username")
                 if not db_password: missing.append("password")
                 raise Exception(f"Missing database configuration: {', '.join(missing)}")
             
@@ -154,7 +165,7 @@ def config_debug():
     
     # Try to get each parameter individually
     params_status = {}
-    test_params = ["database/host", "database/port", "database/name", "database/user"]
+    test_params = ["database/host", "database/port", "database/name", "database/username"]
     
     for param in test_params:
         try:

@@ -47,6 +47,7 @@ export const apiMainFunction = defineFunction(
         "ssm:GetParametersByPath"
       ],
       resources: [
+        `arn:aws:ssm:*:*:parameter/amplify/arctanwines/*`,
         `arn:aws:ssm:*:*:parameter/amplify/arctan-wines/*`,
         `arn:aws:ssm:*:*:parameter/amplify/*`,
         `arn:aws:ssm:*:*:parameter/arctan-wines/*`
