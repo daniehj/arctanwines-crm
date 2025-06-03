@@ -50,66 +50,103 @@ def get_environment():
     return 'prod', env_info
 
 def get_ssm_parameter(parameter_name):
-    """Get SSM parameter with detailed error handling"""
+    """Get SSM parameter with detailed error handling and environment variable fallback"""
     env, env_info = get_environment()
     
-    # Try environment-specific parameter first with correct Amplify + project prefix
-    env_param = f"/amplify/arctanwines/{env}/{parameter_name}"
+    # First try environment variables (for VPC scenarios without internet access)
+    env_var_map = {
+        "database/host": "DATABASE_HOST",
+        "database/port": "DATABASE_PORT", 
+        "database/name": "DATABASE_NAME",
+        "database/username": "DATABASE_USERNAME"
+    }
+    
+    if parameter_name in env_var_map:
+        env_value = os.environ.get(env_var_map[parameter_name])
+        if env_value:
+            print(f"Using environment variable {env_var_map[parameter_name]} for {parameter_name}")
+            return env_value
+    
+    # If no environment variable, try SSM
     try:
-        response = ssm_client.get_parameter(Name=env_param, WithDecryption=True)
-        return response['Parameter']['Value']
-    except Exception as e1:
-        # Try generic parameter with Amplify + project prefix
-        generic_param = f"/amplify/arctanwines/{parameter_name}"
+        # Try environment-specific parameter first with correct Amplify + project prefix
+        env_param = f"/amplify/arctanwines/{env}/{parameter_name}"
         try:
-            response = ssm_client.get_parameter(Name=generic_param, WithDecryption=True)
+            response = ssm_client.get_parameter(Name=env_param, WithDecryption=True)
             return response['Parameter']['Value']
-        except Exception as e2:
-            # Try with hyphen fallback
-            env_hyphen_param = f"/amplify/arctan-wines/{env}/{parameter_name}"
+        except Exception as e1:
+            # Try generic parameter with Amplify + project prefix
+            generic_param = f"/amplify/arctanwines/{parameter_name}"
             try:
-                response = ssm_client.get_parameter(Name=env_hyphen_param, WithDecryption=True)
+                response = ssm_client.get_parameter(Name=generic_param, WithDecryption=True)
                 return response['Parameter']['Value']
-            except Exception as e3:
-                generic_hyphen_param = f"/amplify/arctan-wines/{parameter_name}"
+            except Exception as e2:
+                # Try with hyphen fallback
+                env_hyphen_param = f"/amplify/arctan-wines/{env}/{parameter_name}"
                 try:
-                    response = ssm_client.get_parameter(Name=generic_hyphen_param, WithDecryption=True)
+                    response = ssm_client.get_parameter(Name=env_hyphen_param, WithDecryption=True)
                     return response['Parameter']['Value']
-                except Exception as e4:
-                    # Try just Amplify prefix as fallback
-                    amplify_env_param = f"/amplify/{env}/{parameter_name}"
+                except Exception as e3:
+                    generic_hyphen_param = f"/amplify/arctan-wines/{parameter_name}"
                     try:
-                        response = ssm_client.get_parameter(Name=amplify_env_param, WithDecryption=True)
+                        response = ssm_client.get_parameter(Name=generic_hyphen_param, WithDecryption=True)
                         return response['Parameter']['Value']
-                    except Exception as e5:
-                        amplify_generic_param = f"/amplify/{parameter_name}"
+                    except Exception as e4:
+                        # Try just Amplify prefix as fallback
+                        amplify_env_param = f"/amplify/{env}/{parameter_name}"
                         try:
-                            response = ssm_client.get_parameter(Name=amplify_generic_param, WithDecryption=True)
+                            response = ssm_client.get_parameter(Name=amplify_env_param, WithDecryption=True)
                             return response['Parameter']['Value']
-                        except Exception as e6:
-                            # Try old arctan-wines paths as fallback
-                            old_env_param = f"/arctan-wines/{env}/{parameter_name}"
+                        except Exception as e5:
+                            amplify_generic_param = f"/amplify/{parameter_name}"
                             try:
-                                response = ssm_client.get_parameter(Name=old_env_param, WithDecryption=True)
+                                response = ssm_client.get_parameter(Name=amplify_generic_param, WithDecryption=True)
                                 return response['Parameter']['Value']
-                            except Exception as e7:
-                                old_generic_param = f"/arctan-wines/{parameter_name}"
+                            except Exception as e6:
+                                # Try old arctan-wines paths as fallback
+                                old_env_param = f"/arctan-wines/{env}/{parameter_name}"
                                 try:
-                                    response = ssm_client.get_parameter(Name=old_generic_param, WithDecryption=True)
+                                    response = ssm_client.get_parameter(Name=old_env_param, WithDecryption=True)
                                     return response['Parameter']['Value']
-                                except Exception as e8:
-                                    # Try environment variable fallback
-                                    env_var = parameter_name.upper().replace('-', '_').replace('/', '_')
-                                    env_value = os.environ.get(env_var)
-                                    if env_value:
-                                        return env_value
-                                    
-                                    # Return detailed error
-                                    raise Exception(f"Parameter {parameter_name} not found. Tried: {env_param} ({str(e1)}), {generic_param} ({str(e2)}), {env_hyphen_param} ({str(e3)}), {generic_hyphen_param} ({str(e4)}), {amplify_env_param} ({str(e5)}), {amplify_generic_param} ({str(e6)}), {old_env_param} ({str(e7)}), {old_generic_param} ({str(e8)}), env var {env_var} (not set). Environment: {env}, Info: {env_info}")
+                                except Exception as e7:
+                                    old_generic_param = f"/arctan-wines/{parameter_name}"
+                                    try:
+                                        response = ssm_client.get_parameter(Name=old_generic_param, WithDecryption=True)
+                                        return response['Parameter']['Value']
+                                    except Exception as e8:
+                                        # Final fallback to environment variable (if not already checked)
+                                        env_var = parameter_name.upper().replace('-', '_').replace('/', '_')
+                                        env_value = os.environ.get(env_var)
+                                        if env_value:
+                                            return env_value
+                                        
+                                        # Return detailed error
+                                        raise Exception(f"Parameter {parameter_name} not found. Tried: {env_param} ({str(e1)}), {generic_param} ({str(e2)}), {env_hyphen_param} ({str(e3)}), {generic_hyphen_param} ({str(e4)}), {amplify_env_param} ({str(e5)}), {amplify_generic_param} ({str(e6)}), {old_env_param} ({str(e7)}), {old_generic_param} ({str(e8)}), env var {env_var} (not set). Environment: {env}, Info: {env_info}")
+    except Exception as outer_e:
+        # If SSM client itself fails (e.g., no internet access in VPC), try environment variables
+        env_var = parameter_name.upper().replace('-', '_').replace('/', '_')
+        env_value = os.environ.get(env_var)
+        if env_value:
+            print(f"SSM failed ({str(outer_e)}), using environment variable {env_var} for {parameter_name}")
+            return env_value
+        
+        raise Exception(f"Could not access SSM ({str(outer_e)}) and no environment variable {env_var} set for {parameter_name}")
 
 def get_database_password():
-    """Get database password from Secrets Manager"""
-    # Known Secrets Manager ARN from the setup
+    """Get database password from Secrets Manager with environment variable fallback"""
+    
+    # First try environment variable
+    password_secret_arn = os.environ.get("DATABASE_PASSWORD_SECRET")
+    if password_secret_arn:
+        try:
+            print(f"Using Secrets Manager ARN from environment variable: {password_secret_arn}")
+            response = secrets_client.get_secret_value(SecretId=password_secret_arn)
+            secret = json.loads(response['SecretString'])
+            return secret.get('password')
+        except Exception as e:
+            print(f"Failed to get password from environment variable secret ARN: {str(e)}")
+    
+    # Fallback to known Secrets Manager ARN
     secret_arn = "arn:aws:secretsmanager:eu-west-1:390402552152:secret:rds!cluster-4c0ddb25-674d-4999-bf55-471ded9ed31a-5ehyNh"
     
     try:
