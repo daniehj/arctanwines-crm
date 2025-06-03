@@ -141,11 +141,29 @@ def init_database():
                 if not db_password: missing.append("password")
                 raise Exception(f"Missing database configuration: {', '.join(missing)}")
             
+            # Log connection details for debugging (without password)
+            print(f"Attempting database connection to: {db_host}:{db_port}/{db_name} as user: {db_user}")
+            
             database_url = f"postgresql+pg8000://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-            engine = create_engine(database_url, echo=False)
+            
+            # Try with different connection parameters for better error handling
+            engine = create_engine(
+                database_url, 
+                echo=False,
+                pool_timeout=30,
+                pool_recycle=300,
+                pool_pre_ping=True,
+                connect_args={
+                    "timeout": 30,
+                    "tcp_keepalives_idle": 600,
+                    "tcp_keepalives_interval": 30,
+                    "tcp_keepalives_count": 3,
+                }
+            )
             SessionLocal = sessionmaker(bind=engine)
             
         except Exception as e:
+            print(f"Database connection failed with error: {str(e)}")
             raise Exception(f"Database initialization failed: {str(e)}")
 
 @app.get("/health")
