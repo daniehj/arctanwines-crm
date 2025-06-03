@@ -154,10 +154,7 @@ def init_database():
                 pool_recycle=300,
                 pool_pre_ping=True,
                 connect_args={
-                    "timeout": 30,
-                    "tcp_keepalives_idle": 600,
-                    "tcp_keepalives_interval": 30,
-                    "tcp_keepalives_count": 3,
+                    "timeout": 30
                 }
             )
             SessionLocal = sessionmaker(bind=engine)
