@@ -47,7 +47,19 @@ export const apiMainFunction = defineFunction(
         "ssm:GetParametersByPath"
       ],
       resources: [
+        `arn:aws:ssm:*:*:parameter/amplify/arctan-wines/*`,
+        `arn:aws:ssm:*:*:parameter/amplify/*`,
         `arn:aws:ssm:*:*:parameter/arctan-wines/*`
+      ]
+    }));
+
+    // Add Secrets Manager permissions for database password
+    lambdaFunction.addToRolePolicy(new PolicyStatement({
+      actions: [
+        "secretsmanager:GetSecretValue"
+      ],
+      resources: [
+        `arn:aws:secretsmanager:*:*:secret:rds!cluster-*`
       ]
     }));
 
