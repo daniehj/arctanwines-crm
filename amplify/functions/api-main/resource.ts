@@ -6,17 +6,25 @@ import { DockerImage, Duration } from "aws-cdk-lib";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
 import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
-import { Vpc, SecurityGroup, SubnetType } from "aws-cdk-lib/aws-ec2";
+import { Vpc, SecurityGroup, SubnetType, Port } from "aws-cdk-lib/aws-ec2";
 
 const functionDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const apiMainFunction = defineFunction(
   (scope) => {
-    // Try to get the VPC where RDS is located
-    // Since RDS was created manually, we'll need to make Lambda VPC-enabled
-    // but use a more flexible approach
-    
-    // Create the FastAPI Lambda function first without VPC
+    // Get the VPC where Aurora cluster is located
+    const vpc = Vpc.fromLookup(scope, "AuroraVpc", {
+      vpcId: "vpc-05c4cb9498d87e69d"
+    });
+
+    // Create a security group for the Lambda function
+    const lambdaSecurityGroup = new SecurityGroup(scope, "lambda-sg", {
+      vpc: vpc,
+      description: "Security group for Lambda function to access Aurora",
+      allowAllOutbound: true
+    });
+
+    // Create the FastAPI Lambda function
     const lambdaFunction = new Function(scope, "api-main", {
       handler: "handler.handler",
       runtime: Runtime.PYTHON_3_12,
@@ -41,10 +49,19 @@ export const apiMainFunction = defineFunction(
       environment: {
         ENVIRONMENT: "production",
         PYTHONPATH: "/var/task"
-      }
+      },
+      // Configure VPC access to connect to Aurora
+      vpc: vpc,
+      vpcSubnets: {
+        subnets: [
+          vpc.privateSubnets[0], // Will use available private subnets
+          vpc.privateSubnets[1],
+        ]
+      },
+      securityGroups: [lambdaSecurityGroup]
     });
 
-    // Add VPC execution permissions
+    // Add VPC execution permissions for Lambda
     lambdaFunction.addToRolePolicy(new PolicyStatement({
       actions: [
         "ec2:CreateNetworkInterface",
@@ -55,6 +72,17 @@ export const apiMainFunction = defineFunction(
       ],
       resources: ["*"]
     }));
+
+    // Allow Lambda security group to connect to Aurora on port 5432
+    // Get reference to the existing Aurora security group
+    const auroraSecurityGroup = SecurityGroup.fromSecurityGroupId(scope, "aurora-sg", "sg-0c0d0e7a3600397fb");
+    
+    // Allow Lambda to connect to Aurora
+    auroraSecurityGroup.addIngressRule(
+      lambdaSecurityGroup,
+      Port.tcp(5432),
+      "Allow Lambda to connect to Aurora PostgreSQL"
+    );
 
     // Add SSM permissions to read configuration parameters
     lambdaFunction.addToRolePolicy(new PolicyStatement({
