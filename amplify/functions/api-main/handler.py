@@ -437,5 +437,46 @@ def test_endpoint():
         "lambda_function": os.environ.get('AWS_LAMBDA_FUNCTION_NAME')
     }
 
+@app.get("/env-debug")
+def env_debug():
+    """Debug endpoint to check environment variables"""
+    try:
+        print(f"[{time.time()}] Getting environment variables...")
+        
+        # Get all environment variables
+        all_env_vars = dict(os.environ)
+        
+        # Filter sensitive ones for security
+        filtered_env_vars = {}
+        for key, value in all_env_vars.items():
+            if any(sensitive in key.upper() for sensitive in ['SECRET', 'PASSWORD', 'TOKEN', 'KEY']):
+                filtered_env_vars[key] = "***REDACTED***"
+            else:
+                filtered_env_vars[key] = value
+        
+        # Check specifically for database environment variables
+        database_env_vars = {
+            key: value for key, value in all_env_vars.items() 
+            if key.startswith('DATABASE_')
+        }
+        
+        print(f"[{time.time()}] Found {len(database_env_vars)} DATABASE_ environment variables")
+        
+        return {
+            "status": "environment variables retrieved",
+            "database_env_vars": database_env_vars,
+            "total_env_vars": len(all_env_vars),
+            "filtered_env_vars": filtered_env_vars,
+            "timestamp": time.time()
+        }
+        
+    except Exception as e:
+        print(f"[{time.time()}] Environment debug failed with error: {str(e)}")
+        return {
+            "status": "environment debug error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
 # AWS Lambda handler
 handler = Mangum(app) 
