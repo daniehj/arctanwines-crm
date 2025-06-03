@@ -6,15 +6,17 @@ import { DockerImage, Duration } from "aws-cdk-lib";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
 import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
-import { Vpc, SecurityGroup, SubnetType, Port } from "aws-cdk-lib/aws-ec2";
+import { Vpc, SecurityGroup, SubnetSelection, Subnet, Port } from "aws-cdk-lib/aws-ec2";
 
 const functionDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const apiMainFunction = defineFunction(
   (scope) => {
-    // Get the VPC where Aurora cluster is located
-    const vpc = Vpc.fromLookup(scope, "AuroraVpc", {
-      vpcId: "vpc-05c4cb9498d87e69d"
+    // Import the existing VPC and subnets by ID instead of lookup
+    const vpc = Vpc.fromVpcAttributes(scope, "AuroraVpc", {
+      vpcId: "vpc-05c4cb9498d87e69d",
+      availabilityZones: ["eu-west-1a", "eu-west-1b", "eu-west-1c"],
+      privateSubnetIds: ["subnet-086978f4e594eb9ae", "subnet-095a97ab243096c24", "subnet-0b11a013be429912f"]
     });
 
     // Create a security group for the Lambda function
@@ -53,10 +55,7 @@ export const apiMainFunction = defineFunction(
       // Configure VPC access to connect to Aurora
       vpc: vpc,
       vpcSubnets: {
-        subnets: [
-          vpc.privateSubnets[0], // Will use available private subnets
-          vpc.privateSubnets[1],
-        ]
+        subnets: vpc.privateSubnets
       },
       securityGroups: [lambdaSecurityGroup]
     });
