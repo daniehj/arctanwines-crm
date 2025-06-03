@@ -6,12 +6,17 @@ import { DockerImage, Duration } from "aws-cdk-lib";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
 import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { Vpc, SecurityGroup, SubnetType } from "aws-cdk-lib/aws-ec2";
 
 const functionDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const apiMainFunction = defineFunction(
   (scope) => {
-    // Create the FastAPI Lambda function
+    // Try to get the VPC where RDS is located
+    // Since RDS was created manually, we'll need to make Lambda VPC-enabled
+    // but use a more flexible approach
+    
+    // Create the FastAPI Lambda function first without VPC
     const lambdaFunction = new Function(scope, "api-main", {
       handler: "handler.handler",
       runtime: Runtime.PYTHON_3_12,
@@ -38,6 +43,18 @@ export const apiMainFunction = defineFunction(
         PYTHONPATH: "/var/task"
       }
     });
+
+    // Add VPC execution permissions
+    lambdaFunction.addToRolePolicy(new PolicyStatement({
+      actions: [
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface",
+        "ec2:AttachNetworkInterface",
+        "ec2:DetachNetworkInterface"
+      ],
+      resources: ["*"]
+    }));
 
     // Add SSM permissions to read configuration parameters
     lambdaFunction.addToRolePolicy(new PolicyStatement({
