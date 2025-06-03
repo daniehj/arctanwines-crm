@@ -217,6 +217,98 @@ def config_debug():
         "aws_region": os.environ.get('AWS_REGION')
     }
 
+@app.get("/vpc-info")
+def vpc_info():
+    """Get VPC and network information from Lambda environment"""
+    try:
+        print(f"[{time.time()}] Getting VPC information...")
+        
+        # Try to get metadata service information (works in VPC)
+        import urllib.request
+        import urllib.error
+        
+        vpc_info = {
+            "timestamp": time.time(),
+            "environment_variables": {
+                key: value for key, value in os.environ.items() 
+                if key.startswith(('AWS_', 'LAMBDA_'))
+            }
+        }
+        
+        # Try to get instance metadata (available in VPC-enabled Lambda)
+        try:
+            metadata_url = "http://169.254.169.254/latest/meta-data/local-ipv4"
+            req = urllib.request.Request(metadata_url, headers={'User-Agent': 'lambda-vpc-check'})
+            with urllib.request.urlopen(req, timeout=2) as response:
+                vpc_info["local_ipv4"] = response.read().decode('utf-8')
+        except Exception as e:
+            vpc_info["local_ipv4_error"] = str(e)
+        
+        # Get network interface information if available
+        try:
+            import subprocess
+            result = subprocess.run(['ip', 'addr', 'show'], capture_output=True, text=True, timeout=5)
+            vpc_info["network_interfaces"] = result.stdout if result.returncode == 0 else result.stderr
+        except Exception as e:
+            vpc_info["network_interfaces_error"] = str(e)
+        
+        print(f"[{time.time()}] VPC information gathered successfully")
+        return {
+            "status": "vpc info retrieved",
+            "info": vpc_info
+        }
+        
+    except Exception as e:
+        print(f"[{time.time()}] VPC info failed with error: {str(e)}")
+        return {
+            "status": "vpc info error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+@app.get("/dns-test")
+def dns_test():
+    """Test DNS resolution for database host"""
+    try:
+        print(f"[{time.time()}] Starting DNS resolution test...")
+        
+        # Get database host from SSM
+        db_host = get_ssm_parameter("database/host")
+        
+        print(f"[{time.time()}] Testing DNS resolution for {db_host}")
+        
+        start_time = time.time()
+        try:
+            ip_addresses = socket.gethostbyname_ex(db_host)
+            end_time = time.time()
+            
+            print(f"[{time.time()}] DNS resolution successful")
+            return {
+                "status": "dns resolved",
+                "hostname": db_host,
+                "ip_addresses": ip_addresses,
+                "resolution_time_ms": round((end_time - start_time) * 1000, 2),
+                "timestamp": time.time()
+            }
+        except socket.gaierror as e:
+            end_time = time.time()
+            print(f"[{time.time()}] DNS resolution failed: {str(e)}")
+            return {
+                "status": "dns resolution failed",
+                "hostname": db_host,
+                "error": str(e),
+                "resolution_time_ms": round((end_time - start_time) * 1000, 2),
+                "timestamp": time.time()
+            }
+            
+    except Exception as e:
+        print(f"[{time.time()}] DNS test failed with error: {str(e)}")
+        return {
+            "status": "dns test error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
 @app.get("/network-test")
 def network_test():
     """Test basic network connectivity to database host"""
