@@ -1,5 +1,7 @@
 import json
 import os
+import time
+import socket
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
@@ -127,11 +129,18 @@ def init_database():
     
     if engine is None:
         try:
+            print(f"[{time.time()}] Starting database initialization...")
+            
+            print(f"[{time.time()}] Getting SSM parameters...")
             db_host = get_ssm_parameter("database/host")
             db_port = get_ssm_parameter("database/port") or "5432"
             db_name = get_ssm_parameter("database/name")
             db_user = get_ssm_parameter("database/username")
+            print(f"[{time.time()}] SSM parameters retrieved successfully")
+            
+            print(f"[{time.time()}] Getting database password from Secrets Manager...")
             db_password = get_database_password()
+            print(f"[{time.time()}] Database password retrieved successfully")
             
             if not all([db_host, db_name, db_user, db_password]):
                 missing = []
@@ -142,25 +151,29 @@ def init_database():
                 raise Exception(f"Missing database configuration: {', '.join(missing)}")
             
             # Log connection details for debugging (without password)
-            print(f"Attempting database connection to: {db_host}:{db_port}/{db_name} as user: {db_user}")
+            print(f"[{time.time()}] Attempting database connection to: {db_host}:{db_port}/{db_name} as user: {db_user}")
             
             database_url = f"postgresql+pg8000://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
             
-            # Try with different connection parameters for better error handling
+            print(f"[{time.time()}] Creating SQLAlchemy engine...")
+            # Use much shorter timeouts to fail fast if there are network issues
             engine = create_engine(
                 database_url, 
                 echo=False,
-                pool_timeout=30,
+                pool_timeout=10,  # Reduced from 30
                 pool_recycle=300,
                 pool_pre_ping=True,
                 connect_args={
-                    "timeout": 30
+                    "timeout": 10  # Reduced from 30
                 }
             )
+            print(f"[{time.time()}] SQLAlchemy engine created successfully")
+            
             SessionLocal = sessionmaker(bind=engine)
+            print(f"[{time.time()}] Database initialization completed successfully")
             
         except Exception as e:
-            print(f"Database connection failed with error: {str(e)}")
+            print(f"[{time.time()}] Database connection failed with error: {str(e)}")
             raise Exception(f"Database initialization failed: {str(e)}")
 
 @app.get("/health")
@@ -204,20 +217,85 @@ def config_debug():
         "aws_region": os.environ.get('AWS_REGION')
     }
 
+@app.get("/network-test")
+def network_test():
+    """Test basic network connectivity to database host"""
+    
+    try:
+        print(f"[{time.time()}] Starting network connectivity test...")
+        
+        # Get database host from SSM
+        db_host = get_ssm_parameter("database/host")
+        db_port = int(get_ssm_parameter("database/port") or "5432")
+        
+        print(f"[{time.time()}] Testing network connectivity to {db_host}:{db_port}")
+        
+        # Test basic socket connection with timeout
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10)  # 10 second timeout
+        
+        start_time = time.time()
+        result = sock.connect_ex((db_host, db_port))
+        end_time = time.time()
+        
+        sock.close()
+        
+        if result == 0:
+            print(f"[{time.time()}] Network connectivity test successful")
+            return {
+                "status": "network accessible",
+                "host": db_host,
+                "port": db_port,
+                "connection_time_ms": round((end_time - start_time) * 1000, 2),
+                "timestamp": time.time()
+            }
+        else:
+            print(f"[{time.time()}] Network connectivity test failed with error code: {result}")
+            return {
+                "status": "network not accessible",
+                "host": db_host,
+                "port": db_port,
+                "error_code": result,
+                "connection_time_ms": round((end_time - start_time) * 1000, 2),
+                "timestamp": time.time()
+            }
+            
+    except Exception as e:
+        print(f"[{time.time()}] Network test failed with error: {str(e)}")
+        return {
+            "status": "network test error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
 @app.get("/db-test")
 def db_test():
     try:
+        print(f"[{time.time()}] Starting db-test endpoint")
+        
+        print(f"[{time.time()}] Initializing database...")
         init_database()
+        
+        print(f"[{time.time()}] Creating database session...")
         db = SessionLocal()
+        
+        print(f"[{time.time()}] Executing test query...")
         result = db.execute(text("SELECT 1")).scalar()
+        
+        print(f"[{time.time()}] Closing database session...")
         db.close()
+        
         env, env_info = get_environment()
+        print(f"[{time.time()}] db-test completed successfully")
+        
         return {
             "status": "database connected", 
             "result": result,
-            "environment": env
+            "environment": env,
+            "timestamp": time.time()
         }
     except Exception as e:
+        print(f"[{time.time()}] db-test failed with error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/api/v1/test")
