@@ -135,7 +135,7 @@ def get_ssm_parameter(parameter_name):
 def get_database_password():
     """Get database password from Secrets Manager with environment variable fallback"""
     
-    # First try environment variable
+    # Try environment variable with Secrets Manager ARN
     password_secret_arn = os.environ.get("DATABASE_PASSWORD_SECRET")
     if password_secret_arn:
         try:
@@ -391,6 +391,64 @@ def network_test():
             
     except Exception as e:
         print(f"[{time.time()}] Network test failed with error: {str(e)}")
+        return {
+            "status": "network test error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
+
+@app.get("/network-simple-test")
+def network_simple_test():
+    """Test basic network connectivity to database host without authentication"""
+    
+    try:
+        print(f"[{time.time()}] Starting simple network connectivity test...")
+        
+        # Get database host from environment variable (should work now)
+        db_host = os.environ.get("DATABASE_HOST")
+        db_port = int(os.environ.get("DATABASE_PORT", "5432"))
+        
+        if not db_host:
+            return {
+                "status": "configuration error",
+                "error": "DATABASE_HOST environment variable not set",
+                "timestamp": time.time()
+            }
+        
+        print(f"[{time.time()}] Testing network connectivity to {db_host}:{db_port}")
+        
+        # Test basic socket connection with timeout
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10)  # 10 second timeout
+        
+        start_time = time.time()
+        result = sock.connect_ex((db_host, db_port))
+        end_time = time.time()
+        
+        sock.close()
+        
+        if result == 0:
+            print(f"[{time.time()}] Network connectivity test successful")
+            return {
+                "status": "network accessible",
+                "host": db_host,
+                "port": db_port,
+                "connection_time_ms": round((end_time - start_time) * 1000, 2),
+                "timestamp": time.time()
+            }
+        else:
+            print(f"[{time.time()}] Network connectivity test failed with error code: {result}")
+            return {
+                "status": "network not accessible",
+                "host": db_host,
+                "port": db_port,
+                "error_code": result,
+                "connection_time_ms": round((end_time - start_time) * 1000, 2),
+                "timestamp": time.time()
+            }
+            
+    except Exception as e:
+        print(f"[{time.time()}] Network simple test failed with error: {str(e)}")
         return {
             "status": "network test error",
             "error": str(e),
