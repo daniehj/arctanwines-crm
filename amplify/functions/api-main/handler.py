@@ -578,5 +578,141 @@ def secrets_debug():
     except Exception as e:
         return {"status": "error", "error": str(e), "timestamp": time.time()}
 
+@app.get("/ssm-vs-secrets-debug")
+def ssm_vs_secrets_debug():
+    """Compare SSM parameters vs Secrets Manager values"""
+    try:
+        print(f"[{time.time()}] Starting SSM vs Secrets comparison...")
+        
+        # Get values from SSM
+        ssm_values = {}
+        ssm_params = ["database/host", "database/port", "database/name", "database/username", "database/password"]
+        
+        for param in ssm_params:
+            try:
+                value = get_ssm_parameter(param)
+                ssm_values[param] = {
+                    "found": True,
+                    "value_length": len(value) if value else 0,
+                    "value_preview": value[:20] + "..." if value and len(value) > 20 else value
+                }
+            except Exception as e:
+                ssm_values[param] = {
+                    "found": False,
+                    "error": str(e)
+                }
+        
+        # Get values from Secrets Manager
+        secrets_values = {}
+        try:
+            password_secret_arn = os.environ.get("DATABASE_PASSWORD_SECRET")
+            if password_secret_arn:
+                response = secrets_client.get_secret_value(SecretId=password_secret_arn)
+                secret_data = json.loads(response['SecretString'])
+                
+                secrets_values = {
+                    "found": True,
+                    "keys": list(secret_data.keys()),
+                    "username": secret_data.get('username'),
+                    "password_length": len(secret_data.get('password', '')) if 'password' in secret_data else 0
+                }
+            else:
+                secrets_values = {"found": False, "error": "No DATABASE_PASSWORD_SECRET env var"}
+        except Exception as e:
+            secrets_values = {"found": False, "error": str(e)}
+        
+        return {
+            "status": "success",
+            "ssm_parameters": ssm_values,
+            "secrets_manager": secrets_values,
+            "recommendation": "Use SSM for all values if password is stored as SecureString",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e), "timestamp": time.time()}
+
+def init_database_pure_ssm():
+    """Initialize database using only SSM Parameter Store (including password)"""
+    global engine, SessionLocal
+    
+    if engine is None:
+        try:
+            print(f"[{time.time()}] Starting pure SSM database initialization...")
+            
+            print(f"[{time.time()}] Getting all database config from SSM parameters...")
+            db_host = get_ssm_parameter("database/host")
+            db_port = get_ssm_parameter("database/port") or "5432"
+            db_name = get_ssm_parameter("database/name")
+            db_user = get_ssm_parameter("database/username")
+            db_password = get_ssm_parameter("database/password")  # This should handle SecureString with WithDecryption=True
+            print(f"[{time.time()}] All SSM parameters retrieved successfully")
+            
+            if not all([db_host, db_name, db_user, db_password]):
+                missing = []
+                if not db_host: missing.append("host")
+                if not db_name: missing.append("name")
+                if not db_user: missing.append("username")
+                if not db_password: missing.append("password")
+                raise Exception(f"Missing SSM database configuration: {', '.join(missing)}")
+            
+            # Log connection details for debugging (without password)
+            print(f"[{time.time()}] Attempting database connection to: {db_host}:{db_port}/{db_name} as user: {db_user}")
+            print(f"[{time.time()}] Password length: {len(db_password)} characters")
+            
+            database_url = f"postgresql+pg8000://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+            
+            print(f"[{time.time()}] Creating SQLAlchemy engine...")
+            # Use much shorter timeouts to fail fast if there are network issues
+            engine = create_engine(
+                database_url, 
+                echo=False,
+                pool_timeout=10,  # Reduced from 30
+                pool_recycle=300,
+                pool_pre_ping=True,
+                connect_args={
+                    "timeout": 10  # Reduced from 30
+                }
+            )
+            print(f"[{time.time()}] SQLAlchemy engine created successfully")
+            
+            SessionLocal = sessionmaker(bind=engine)
+            print(f"[{time.time()}] Pure SSM database initialization completed successfully")
+            
+        except Exception as e:
+            print(f"[{time.time()}] Pure SSM database connection failed with error: {str(e)}")
+            raise Exception(f"Pure SSM database initialization failed: {str(e)}")
+
+@app.get("/db-test-pure-ssm")
+def db_test_pure_ssm():
+    """Test database connection using only SSM Parameter Store"""
+    try:
+        print(f"[{time.time()}] Starting db-test-pure-ssm endpoint")
+        
+        print(f"[{time.time()}] Initializing database with pure SSM...")
+        init_database_pure_ssm()
+        
+        print(f"[{time.time()}] Creating database session...")
+        db = SessionLocal()
+        
+        print(f"[{time.time()}] Executing test query...")
+        result = db.execute(text("SELECT 1")).scalar()
+        
+        print(f"[{time.time()}] Closing database session...")
+        db.close()
+        
+        env, env_info = get_environment()
+        print(f"[{time.time()}] db-test-pure-ssm completed successfully")
+        
+        return {
+            "status": "database connected via pure SSM", 
+            "result": result,
+            "environment": env,
+            "method": "SSM Parameter Store only",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        print(f"[{time.time()}] db-test-pure-ssm failed with error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Pure SSM Database error: {str(e)}")
+
 # AWS Lambda handler
 handler = Mangum(app) 
