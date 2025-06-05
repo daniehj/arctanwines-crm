@@ -497,44 +497,64 @@ def test_endpoint():
 
 @app.get("/env-debug")
 def env_debug():
-    """Debug endpoint to check environment variables"""
+    """Debug environment variables and configuration"""
     try:
-        print(f"[{time.time()}] Getting environment variables...")
+        env, env_info = get_environment()
         
-        # Get all environment variables
-        all_env_vars = dict(os.environ)
-        
-        # Filter sensitive ones for security
-        filtered_env_vars = {}
-        for key, value in all_env_vars.items():
-            if any(sensitive in key.upper() for sensitive in ['SECRET', 'PASSWORD', 'TOKEN', 'KEY']):
-                filtered_env_vars[key] = "***REDACTED***"
-            else:
-                filtered_env_vars[key] = value
-        
-        # Check specifically for database environment variables
+        # Check database environment variables
         database_env_vars = {
-            key: value for key, value in all_env_vars.items() 
-            if key.startswith('DATABASE_')
+            "DATABASE_HOST": os.environ.get("DATABASE_HOST"),
+            "DATABASE_PORT": os.environ.get("DATABASE_PORT"),
+            "DATABASE_NAME": os.environ.get("DATABASE_NAME"),
+            "DATABASE_USERNAME": os.environ.get("DATABASE_USERNAME"),
+            "DATABASE_PASSWORD_SECRET": os.environ.get("DATABASE_PASSWORD_SECRET")
         }
         
-        print(f"[{time.time()}] Found {len(database_env_vars)} DATABASE_ environment variables")
+        # Check if any are missing or None
+        missing_env_vars = [k for k, v in database_env_vars.items() if not v]
         
         return {
-            "status": "environment variables retrieved",
+            "status": "success",
+            "environment": env,
+            "env_info": env_info,
             "database_env_vars": database_env_vars,
-            "total_env_vars": len(all_env_vars),
-            "filtered_env_vars": filtered_env_vars,
+            "missing_env_vars": missing_env_vars,
             "timestamp": time.time()
         }
-        
     except Exception as e:
-        print(f"[{time.time()}] Environment debug failed with error: {str(e)}")
+        return {"status": "error", "error": str(e), "timestamp": time.time()}
+
+@app.get("/secrets-debug")
+def secrets_debug():
+    """Debug Secrets Manager credentials to check authentication issue"""
+    try:
+        print(f"[{time.time()}] Starting secrets debug...")
+        
+        # Get the secret ARN from environment
+        password_secret_arn = os.environ.get("DATABASE_PASSWORD_SECRET")
+        if not password_secret_arn:
+            return {"error": "DATABASE_PASSWORD_SECRET environment variable not set"}
+        
+        print(f"[{time.time()}] Using secret ARN: {password_secret_arn}")
+        
+        # Retrieve the secret
+        response = secrets_client.get_secret_value(SecretId=password_secret_arn)
+        secret_data = json.loads(response['SecretString'])
+        
+        # Return non-sensitive information about the secret
         return {
-            "status": "environment debug error",
-            "error": str(e),
+            "status": "success",
+            "secret_arn": password_secret_arn,
+            "secret_keys": list(secret_data.keys()),
+            "username_from_secret": secret_data.get('username', 'NOT_FOUND'),
+            "has_password": 'password' in secret_data,
+            "password_length": len(secret_data.get('password', '')) if 'password' in secret_data else 0,
+            "env_username": os.environ.get("DATABASE_USERNAME"),
+            "username_match": secret_data.get('username') == os.environ.get("DATABASE_USERNAME"),
             "timestamp": time.time()
         }
+    except Exception as e:
+        return {"status": "error", "error": str(e), "timestamp": time.time()}
 
 # AWS Lambda handler
 handler = Mangum(app) 
