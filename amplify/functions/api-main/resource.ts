@@ -59,6 +59,17 @@ export const apiMainFunction = defineFunction(
       privateDnsEnabled: true
     });
 
+    // Create VPC endpoint for SSM Parameter Store
+    const ssmVpcEndpoint = new InterfaceVpcEndpoint(scope, "ssm-vpc-endpoint", {
+      vpc: vpc,
+      service: InterfaceVpcEndpointAwsService.SSM,
+      subnets: {
+        subnets: vpc.privateSubnets
+      },
+      securityGroups: [vpcEndpointSecurityGroup],
+      privateDnsEnabled: true
+    });
+
     // Create the FastAPI Lambda function
     const lambdaFunction = new Function(scope, "api-main", {
       handler: "handler.handler",
@@ -83,7 +94,13 @@ export const apiMainFunction = defineFunction(
       }),
       environment: {
         ENVIRONMENT: "production",
-        PYTHONPATH: "/var/task"
+        PYTHONPATH: "/var/task",
+        // Temporary fallback environment variables while SSM VPC endpoint is being deployed
+        DATABASE_HOST: "arctanwines-crm-prod.cluster-c1m6agouerh1.eu-west-1.rds.amazonaws.com",
+        DATABASE_PORT: "5432",
+        DATABASE_NAME: "postgres",
+        DATABASE_USERNAME: "postgres",
+        DATABASE_PASSWORD_SECRET: "arn:aws:secretsmanager:eu-west-1:390402552152:secret:rds!cluster-4c0ddb25-674d-4999-bf55-471ded9ed31a-5ehyNh"
       },
       // Configure VPC access to connect to Aurora
       vpc: vpc,
