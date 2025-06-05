@@ -133,9 +133,9 @@ def get_ssm_parameter(parameter_name):
         raise Exception(f"Could not access SSM ({str(outer_e)}) and no environment variable {env_var} set for {parameter_name}")
 
 def get_database_password():
-    """Get database password from Secrets Manager with environment variable fallback"""
+    """Get database password from Secrets Manager with SSM parameter fallback"""
     
-    # Try environment variable with Secrets Manager ARN
+    # Try environment variable with Secrets Manager ARN first (for backwards compatibility)
     password_secret_arn = os.environ.get("DATABASE_PASSWORD_SECRET")
     if password_secret_arn:
         try:
@@ -146,16 +146,28 @@ def get_database_password():
         except Exception as e:
             print(f"Failed to get password from environment variable secret ARN: {str(e)}")
     
-    # Fallback to known Secrets Manager ARN
-    secret_arn = "arn:aws:secretsmanager:eu-west-1:390402552152:secret:rds!cluster-4c0ddb25-674d-4999-bf55-471ded9ed31a-5ehyNh"
-    
+    # Try to get secret ARN from SSM parameter
     try:
+        secret_arn = get_ssm_parameter("database/password_secret_arn")
+        print(f"Using Secrets Manager ARN from SSM parameter: {secret_arn}")
         response = secrets_client.get_secret_value(SecretId=secret_arn)
         secret = json.loads(response['SecretString'])
         return secret.get('password')
     except Exception as e:
-        # Fallback to SSM parameter
+        print(f"Failed to get secret ARN from SSM parameter: {str(e)}")
+    
+    # Fallback to hardcoded secret ARN (for backwards compatibility)
+    secret_arn = "arn:aws:secretsmanager:eu-west-1:390402552152:secret:rds!cluster-4c0ddb25-674d-4999-bf55-471ded9ed31a-5ehyNh"
+    
+    try:
+        print(f"Using fallback hardcoded Secrets Manager ARN: {secret_arn}")
+        response = secrets_client.get_secret_value(SecretId=secret_arn)
+        secret = json.loads(response['SecretString'])
+        return secret.get('password')
+    except Exception as e:
+        # Final fallback to SSM parameter for password directly
         try:
+            print(f"Failed with secret ARN, trying direct password from SSM: {str(e)}")
             return get_ssm_parameter("database/password")
         except Exception as e2:
             raise Exception(f"Could not get database password from Secrets Manager ({str(e)}) or SSM ({str(e2)})")
