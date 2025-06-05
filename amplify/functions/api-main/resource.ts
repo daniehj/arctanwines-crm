@@ -94,13 +94,7 @@ export const apiMainFunction = defineFunction(
       }),
       environment: {
         ENVIRONMENT: "production",
-        PYTHONPATH: "/var/task",
-        // Temporary fallback environment variables while SSM VPC endpoint is being deployed
-        DATABASE_HOST: "arctanwines-crm-prod.cluster-c1m6agouerh1.eu-west-1.rds.amazonaws.com",
-        DATABASE_PORT: "5432",
-        DATABASE_NAME: "postgres",
-        DATABASE_USERNAME: "postgres",
-        DATABASE_PASSWORD_SECRET: "arn:aws:secretsmanager:eu-west-1:390402552152:secret:rds!cluster-4c0ddb25-674d-4999-bf55-471ded9ed31a-5ehyNh"
+        PYTHONPATH: "/var/task"
       },
       // Configure VPC access to connect to Aurora
       vpc: vpc,
