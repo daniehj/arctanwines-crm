@@ -6,15 +6,16 @@ import { DockerImage, Duration } from "aws-cdk-lib";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
 import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
-import { Vpc, SecurityGroup, SubnetSelection, Subnet, Port } from "aws-cdk-lib/aws-ec2";
+import { Vpc, SecurityGroup, SubnetSelection, Subnet, Port, InterfaceVpcEndpoint, InterfaceVpcEndpointAwsService } from "aws-cdk-lib/aws-ec2";
 
 const functionDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const apiMainFunction = defineFunction(
   (scope) => {
-    // Import the existing VPC and subnets by ID instead of lookup
+    // Import the existing VPC and subnets by ID with CIDR block
     const vpc = Vpc.fromVpcAttributes(scope, "AuroraVpc", {
       vpcId: "vpc-05c4cb9498d87e69d",
+      vpcCidrBlock: "172.31.0.0/16", // Actual VPC CIDR from AWS console
       availabilityZones: ["eu-west-1a", "eu-west-1b", "eu-west-1c"],
       privateSubnetIds: ["subnet-086978f4e594eb9ae", "subnet-095a97ab243096c24", "subnet-0b11a013be429912f"]
     });
@@ -24,6 +25,38 @@ export const apiMainFunction = defineFunction(
       vpc: vpc,
       description: "Security group for Lambda function to access Aurora",
       allowAllOutbound: true
+    });
+
+    // Create a security group for VPC endpoints
+    const vpcEndpointSecurityGroup = new SecurityGroup(scope, "vpc-endpoint-sg", {
+      vpc: vpc,
+      description: "Security group for VPC endpoints to access AWS services",
+      allowAllOutbound: false
+    });
+
+    // Allow HTTPS traffic from Lambda to VPC endpoints
+    vpcEndpointSecurityGroup.addIngressRule(
+      lambdaSecurityGroup,
+      Port.tcp(443),
+      "Allow Lambda to access VPC endpoints"
+    );
+
+    // Allow Lambda to access VPC endpoints (HTTPS)
+    lambdaSecurityGroup.addEgressRule(
+      vpcEndpointSecurityGroup,
+      Port.tcp(443),
+      "Allow Lambda to access AWS services via VPC endpoints"
+    );
+
+    // Create VPC endpoint for Secrets Manager (primary need)
+    const secretsManagerVpcEndpoint = new InterfaceVpcEndpoint(scope, "secrets-manager-vpc-endpoint", {
+      vpc: vpc,
+      service: InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+      subnets: {
+        subnets: vpc.privateSubnets
+      },
+      securityGroups: [vpcEndpointSecurityGroup],
+      privateDnsEnabled: true
     });
 
     // Create the FastAPI Lambda function
