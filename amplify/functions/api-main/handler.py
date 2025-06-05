@@ -133,7 +133,7 @@ def get_ssm_parameter(parameter_name):
         raise Exception(f"Could not access SSM ({str(outer_e)}) and no environment variable {env_var} set for {parameter_name}")
 
 def get_database_password():
-    """Get database password from Secrets Manager with SSM parameter fallback"""
+    """Get database password and username from Secrets Manager with SSM parameter fallback"""
     
     # Try environment variable with Secrets Manager ARN first (for backwards compatibility)
     password_secret_arn = os.environ.get("DATABASE_PASSWORD_SECRET")
@@ -142,7 +142,7 @@ def get_database_password():
             print(f"Using Secrets Manager ARN from environment variable: {password_secret_arn}")
             response = secrets_client.get_secret_value(SecretId=password_secret_arn)
             secret = json.loads(response['SecretString'])
-            return secret.get('password')
+            return secret.get('password'), secret.get('username')
         except Exception as e:
             print(f"Failed to get password from environment variable secret ARN: {str(e)}")
     
@@ -152,7 +152,7 @@ def get_database_password():
         print(f"Using Secrets Manager ARN from SSM parameter: {secret_arn}")
         response = secrets_client.get_secret_value(SecretId=secret_arn)
         secret = json.loads(response['SecretString'])
-        return secret.get('password')
+        return secret.get('password'), secret.get('username')
     except Exception as e:
         print(f"Failed to get secret ARN from SSM parameter: {str(e)}")
     
@@ -163,12 +163,14 @@ def get_database_password():
         print(f"Using fallback hardcoded Secrets Manager ARN: {secret_arn}")
         response = secrets_client.get_secret_value(SecretId=secret_arn)
         secret = json.loads(response['SecretString'])
-        return secret.get('password')
+        return secret.get('password'), secret.get('username')
     except Exception as e:
         # Final fallback to SSM parameter for password directly
         try:
             print(f"Failed with secret ARN, trying direct password from SSM: {str(e)}")
-            return get_ssm_parameter("database/password")
+            password = get_ssm_parameter("database/password")
+            username = get_ssm_parameter("database/username")
+            return password, username
         except Exception as e2:
             raise Exception(f"Could not get database password from Secrets Manager ({str(e)}) or SSM ({str(e2)})")
 
@@ -184,12 +186,20 @@ def init_database():
             db_host = get_ssm_parameter("database/host")
             db_port = get_ssm_parameter("database/port") or "5432"
             db_name = get_ssm_parameter("database/name")
-            db_user = get_ssm_parameter("database/username")
             print(f"[{time.time()}] SSM parameters retrieved successfully")
             
-            print(f"[{time.time()}] Getting database password from Secrets Manager...")
-            db_password = get_database_password()
-            print(f"[{time.time()}] Database password retrieved successfully")
+            print(f"[{time.time()}] Getting database credentials from Secrets Manager...")
+            db_password, secret_username = get_database_password()
+            
+            # Use username from secret if available, otherwise fall back to SSM
+            if secret_username:
+                print(f"[{time.time()}] Using username from Secrets Manager: {secret_username}")
+                db_user = secret_username
+            else:
+                print(f"[{time.time()}] No username in secret, using SSM parameter...")
+                db_user = get_ssm_parameter("database/username")
+            
+            print(f"[{time.time()}] Database credentials retrieved successfully")
             
             if not all([db_host, db_name, db_user, db_password]):
                 missing = []
