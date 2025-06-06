@@ -175,12 +175,59 @@ def get_database_password():
             raise Exception(f"Could not get database password from Secrets Manager ({str(e)}) or SSM ({str(e2)})")
 
 def init_database():
-    """Initialize database with detailed error reporting"""
+    """Initialize database using SSM Parameter Store (preferred) with Secrets Manager fallback"""
     global engine, SessionLocal
     
     if engine is None:
         try:
             print(f"[{time.time()}] Starting database initialization...")
+            
+            # Try pure SSM approach first (preferred)
+            try:
+                print(f"[{time.time()}] Attempting pure SSM Parameter Store approach...")
+                
+                db_host = get_ssm_parameter("database/host")
+                db_port = get_ssm_parameter("database/port") or "5432"
+                db_name = get_ssm_parameter("database/name")
+                db_user = get_ssm_parameter("database/username")
+                db_password = get_ssm_parameter("database/password")  # SecureString with WithDecryption=True
+                
+                print(f"[{time.time()}] All SSM parameters retrieved successfully")
+                
+                if all([db_host, db_name, db_user, db_password]):
+                    print(f"[{time.time()}] Using pure SSM Parameter Store configuration")
+                    print(f"[{time.time()}] Connecting to: {db_host}:{db_port}/{db_name} as user: {db_user}")
+                    print(f"[{time.time()}] Password length: {len(db_password)} characters")
+                    
+                    database_url = f"postgresql+pg8000://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+                    
+                    engine = create_engine(
+                        database_url, 
+                        echo=False,
+                        pool_timeout=10,
+                        pool_recycle=300,
+                        pool_pre_ping=True,
+                        connect_args={
+                            "timeout": 10
+                        }
+                    )
+                    
+                    SessionLocal = sessionmaker(bind=engine)
+                    print(f"[{time.time()}] Database initialization completed successfully using SSM Parameter Store")
+                    return
+                else:
+                    missing = []
+                    if not db_host: missing.append("host")
+                    if not db_name: missing.append("name")
+                    if not db_user: missing.append("username")
+                    if not db_password: missing.append("password")
+                    print(f"[{time.time()}] Missing SSM parameters: {', '.join(missing)}, falling back to Secrets Manager")
+                    
+            except Exception as e:
+                print(f"[{time.time()}] Pure SSM approach failed: {str(e)}, falling back to Secrets Manager")
+            
+            # Fallback to mixed SSM + Secrets Manager approach (backwards compatibility)
+            print(f"[{time.time()}] Using fallback: SSM parameters + Secrets Manager password...")
             
             print(f"[{time.time()}] Getting SSM parameters...")
             db_host = get_ssm_parameter("database/host")
@@ -229,7 +276,7 @@ def init_database():
             print(f"[{time.time()}] SQLAlchemy engine created successfully")
             
             SessionLocal = sessionmaker(bind=engine)
-            print(f"[{time.time()}] Database initialization completed successfully")
+            print(f"[{time.time()}] Database initialization completed successfully using fallback method")
             
         except Exception as e:
             print(f"[{time.time()}] Database connection failed with error: {str(e)}")
