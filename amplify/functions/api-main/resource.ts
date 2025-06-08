@@ -5,7 +5,7 @@ import { defineFunction } from "@aws-amplify/backend";
 import { DockerImage, Duration } from "aws-cdk-lib";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
 import { RestApi, LambdaIntegration, AuthorizationType, MethodLoggingLevel } from "aws-cdk-lib/aws-apigateway";
-import { PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { PolicyStatement, Role, WebIdentityPrincipal, PolicyDocument, Effect } from "aws-cdk-lib/aws-iam";
 import { Vpc, SecurityGroup, Port, InterfaceVpcEndpoint, InterfaceVpcEndpointAwsService } from "aws-cdk-lib/aws-ec2";
 
 const functionDir = path.dirname(fileURLToPath(import.meta.url));
