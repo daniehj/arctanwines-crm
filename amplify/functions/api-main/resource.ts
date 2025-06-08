@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { defineFunction } from "@aws-amplify/backend";
 import { DockerImage, Duration } from "aws-cdk-lib";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
-import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
+import { RestApi, LambdaIntegration, AuthorizationType, MethodLoggingLevel } from "aws-cdk-lib/aws-apigateway";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
-import { Vpc, SecurityGroup, SubnetSelection, Subnet, Port, InterfaceVpcEndpoint, InterfaceVpcEndpointAwsService } from "aws-cdk-lib/aws-ec2";
+import { Vpc, SecurityGroup, Port, InterfaceVpcEndpoint, InterfaceVpcEndpointAwsService } from "aws-cdk-lib/aws-ec2";
 
 const functionDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -161,15 +161,50 @@ export const apiMainFunction = defineFunction(
       resources: ["*"]
     }));
 
-    // Create an API Gateway for HTTP access
-    const api = new LambdaRestApi(scope, "api-main-gateway", {
-      handler: lambdaFunction,
-      proxy: true,
+    // Create REST API with AWS IAM authorization
+    const api = new RestApi(scope, "wine-crm-api", {
+      restApiName: "arctanwines-crm-api",
+      description: "Wine Import CRM API with AWS IAM authorization",
+      deployOptions: {
+        stageName: 'api',
+        loggingLevel: MethodLoggingLevel.INFO,
+        dataTraceEnabled: true,
+        metricsEnabled: true
+      },
       defaultCorsPreflightOptions: {
         allowOrigins: ["*"],
-        allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allowHeaders: ["*"]
+        allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+        allowHeaders: [
+          "Content-Type", 
+          "X-Amz-Date", 
+          "Authorization", 
+          "X-Api-Key", 
+          "X-Amz-Security-Token", 
+          "X-Requested-With",
+          "Access-Control-Allow-Origin",
+          "Access-Control-Allow-Headers",
+          "Access-Control-Allow-Methods"
+        ],
+        allowCredentials: true,
+        exposeHeaders: ["*"],
+        maxAge: Duration.days(1)
       }
+    });
+
+    // Create Lambda integration
+    const lambdaIntegration = new LambdaIntegration(lambdaFunction, {
+      proxy: true
+    });
+
+    // Root endpoint with AWS IAM authorization
+    api.root.addMethod("ANY", lambdaIntegration, {
+      authorizationType: AuthorizationType.IAM
+    });
+
+    // Proxy resource for all paths with AWS IAM authorization
+    const proxyResource = api.root.addResource("{proxy+}");
+    proxyResource.addMethod("ANY", lambdaIntegration, {
+      authorizationType: AuthorizationType.IAM
     });
 
     return lambdaFunction;
