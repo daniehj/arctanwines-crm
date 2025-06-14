@@ -47,12 +47,12 @@ export default function DeveloperDashboard() {
       let response;
       if (endpoint.method === 'GET') {
         response = await get({
-          apiName: 'wine-crm-api',
+          apiName: 'arctanwines-crm-api',
           path: endpoint.path,
         }).response;
       } else {
         response = await post({
-          apiName: 'wine-crm-api',
+          apiName: 'arctanwines-crm-api',
           path: endpoint.path,
         }).response;
       }

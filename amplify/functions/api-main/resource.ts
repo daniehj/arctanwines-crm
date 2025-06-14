@@ -162,7 +162,7 @@ export const apiMainFunction = defineFunction(
     }));
 
     // Create REST API with AWS IAM authorization
-    const api = new RestApi(scope, "wine-crm-api", {
+    const api = new RestApi(scope, "arctanwines-crm-api", {
       restApiName: "arctanwines-crm-api",
       description: "Wine Import CRM API with AWS IAM authorization",
       deployOptions: {
