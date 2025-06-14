@@ -11,5 +11,15 @@ export const backend = defineBackend({
   apiMainFunction,
 });
 
+// Export the API configuration for the frontend
+export const api = {
+  name: 'arctanwines-crm-api',
+  endpoints: {
+    api: {
+      endpoint: 'https://api.arctanwines.com/api', // This will be replaced with the actual endpoint after deployment
+    },
+  },
+};
+
 // The environment variables will be automatically injected by Amplify Gen2
 // when the function has access to auth and data resources
