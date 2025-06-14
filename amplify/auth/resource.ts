@@ -13,13 +13,7 @@ export const auth = defineAuth({
       mutable: true,
       required: true,
     },
-    givenName: {
-      mutable: true,
-      required: true,
-    },
-    familyName: {
-      mutable: true,
-      required: true,
-    },
+    // Removed givenName and familyName to avoid conflicts with existing user pool
+    // These can be added as custom attributes if needed
   },
 });
