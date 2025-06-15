@@ -11,6 +11,7 @@
   "dependencies": {
     "-": "^0.0.1",
     "@aws-amplify/ui-react": "^6.0.10",
+    "@aws-sdk/client-ssm": "^3.0.0",
     "aws-amplify": "^6.0.17",
     "cors": "^2.8.5",
     "express": "^4.21.2",

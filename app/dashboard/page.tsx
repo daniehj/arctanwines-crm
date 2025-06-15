@@ -49,11 +49,23 @@ export default function DeveloperDashboard() {
         response = await get({
           apiName: 'arctanwines-crm-api',
           path: endpoint.path,
+          options: {
+            withCredentials: true,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
         }).response;
       } else {
         response = await post({
           apiName: 'arctanwines-crm-api',
           path: endpoint.path,
+          options: {
+            withCredentials: true,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
         }).response;
       }
 
@@ -71,6 +83,7 @@ export default function DeveloperDashboard() {
       ]);
     } catch (error: any) {
       const duration = Date.now() - startTime;
+      console.error('API Error:', error);
       
       setTestResults(prev => [
         ...prev.filter(r => r.endpoint !== endpoint.name),
