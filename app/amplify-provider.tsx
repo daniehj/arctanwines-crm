@@ -27,7 +27,7 @@ export default function AmplifyProvider({
       API: {
         REST: {
           'arctanwines-crm-api': {
-            endpoint: 'https://ddezqhodb8.execute-api.eu-west-1.amazonaws.com',
+            endpoint: 'https://ddezqhodb8.execute-api.eu-west-1.amazonaws.com/api',
             region: 'eu-west-1',
           },
         },

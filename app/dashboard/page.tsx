@@ -122,7 +122,7 @@ export default function DeveloperDashboard() {
   const testFetch = async () => {
     console.log('Testing with regular fetch (this should fail with IAM auth)...');
     try {
-      const response = await fetch('https://ddezqhodb8.execute-api.eu-west-1.amazonaws.com/health');
+      const response = await fetch('https://ddezqhodb8.execute-api.eu-west-1.amazonaws.com/api/health');
       console.log('Fetch response:', response.status, response.statusText);
       if (response.ok) {
         const data = await response.json();
