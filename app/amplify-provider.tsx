@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Amplify } from 'aws-amplify';
-import outputs from '../amplify_outputs.json';
 
 export default function AmplifyProvider({
   children,
@@ -12,8 +11,28 @@ export default function AmplifyProvider({
   const [isConfigured, setIsConfigured] = useState(false);
 
   useEffect(() => {
-    // Simple configuration with amplify_outputs.json
-    Amplify.configure(outputs);
+    // Configure Amplify directly in code
+    Amplify.configure({
+      Auth: {
+        Cognito: {
+          userPoolId: 'eu-west-1_zGyN4f7YA',
+          userPoolClientId: '34jotc4tl1i9lmeqb9lmnq96dl',
+          identityPoolId: 'eu-west-1:3022ae09-6fe2-4273-b2cf-95a4903198f5',
+          signUpVerificationMethod: 'code',
+          loginWith: {
+            email: true,
+          },
+        },
+      },
+      API: {
+        REST: {
+          'arctanwines-crm-api': {
+            endpoint: 'https://ddezqhodb8.execute-api.eu-west-1.amazonaws.com',
+            region: 'eu-west-1',
+          },
+        },
+      },
+    });
     setIsConfigured(true);
   }, []);
 
