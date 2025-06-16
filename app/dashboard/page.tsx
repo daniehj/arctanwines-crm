@@ -12,6 +12,7 @@ interface TestResult {
   response?: any;
   error?: string;
   duration?: number;
+  method?: string;
 }
 
 export default function DeveloperDashboard() {
@@ -43,6 +44,9 @@ export default function DeveloperDashboard() {
       { endpoint: endpoint.name, status: 'loading' }
     ]);
 
+    console.log(`Testing endpoint: ${endpoint.name} (${endpoint.method} ${endpoint.path})`);
+    console.log('Using Amplify API with IAM authentication...');
+
     try {
       let response;
       if (endpoint.method === 'GET') {
@@ -50,7 +54,6 @@ export default function DeveloperDashboard() {
           apiName: 'arctanwines-crm-api',
           path: endpoint.path,
           options: {
-            withCredentials: true,
             headers: {
               'Content-Type': 'application/json',
             },
@@ -61,7 +64,6 @@ export default function DeveloperDashboard() {
           apiName: 'arctanwines-crm-api',
           path: endpoint.path,
           options: {
-            withCredentials: true,
             headers: {
               'Content-Type': 'application/json',
             },
@@ -71,6 +73,7 @@ export default function DeveloperDashboard() {
 
       const duration = Date.now() - startTime;
       const body = await response.body.json();
+      console.log('Amplify API successful:', body);
 
       setTestResults(prev => [
         ...prev.filter(r => r.endpoint !== endpoint.name),
@@ -78,7 +81,8 @@ export default function DeveloperDashboard() {
           endpoint: endpoint.name,
           status: 'success',
           response: body,
-          duration
+          duration,
+          method: 'Amplify API (IAM signed)'
         }
       ]);
     } catch (error: any) {
@@ -112,6 +116,26 @@ export default function DeveloperDashboard() {
 
   const clearResults = () => {
     setTestResults([]);
+  };
+
+  // Simple fetch test function (will fail with IAM auth)
+  const testFetch = async () => {
+    console.log('Testing with regular fetch (this should fail with IAM auth)...');
+    try {
+      const response = await fetch('https://ddezqhodb8.execute-api.eu-west-1.amazonaws.com/health');
+      console.log('Fetch response:', response.status, response.statusText);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Fetch data:', data);
+        alert(`Unexpected success: ${JSON.stringify(data)}`);
+      } else {
+        console.log('Fetch failed as expected with IAM auth');
+        alert(`Fetch failed as expected with IAM auth: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Fetch error (expected with IAM auth):', error);
+      alert(`Fetch failed as expected with IAM auth: ${error}`);
+    }
   };
 
   return (
@@ -166,6 +190,12 @@ export default function DeveloperDashboard() {
                     className="px-6 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     Clear Results
+                  </button>
+                  <button
+                    onClick={testFetch}
+                    className="px-6 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700"
+                  >
+                    Test Fetch
                   </button>
                 </div>
               </div>

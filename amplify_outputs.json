@@ -14,7 +14,8 @@
     "rest": {
       "arctanwines-crm-api": {
         "endpoint": "https://ddezqhodb8.execute-api.eu-west-1.amazonaws.com",
-        "region": "eu-west-1"
+        "region": "eu-west-1",
+        "authorization_type": "AWS_IAM"
       }
     }
   }
