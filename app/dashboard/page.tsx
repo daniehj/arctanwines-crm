@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Authenticator } from '@aws-amplify/ui-react';
-import { getCurrentUser, signOut } from 'aws-amplify/auth';
+import { getCurrentUser, signOut, fetchAuthSession } from 'aws-amplify/auth';
 import { post, get } from 'aws-amplify/api';
 import '@aws-amplify/ui-react/styles.css';
 
@@ -138,6 +138,34 @@ export default function DeveloperDashboard() {
     }
   };
 
+  // Debug authentication and credentials
+  const debugAuth = async () => {
+    try {
+      console.log('=== Authentication Debug ===');
+      
+      // Check current user
+      const user = await getCurrentUser();
+      console.log('Current user:', user);
+      
+      // Check auth session and credentials
+      const session = await fetchAuthSession();
+      console.log('Auth session:', session);
+      console.log('Credentials available:', !!session.credentials);
+      console.log('Identity ID:', session.identityId);
+      
+      if (session.credentials) {
+        console.log('AWS Access Key ID:', session.credentials.accessKeyId?.substring(0, 10) + '...');
+        console.log('AWS Secret Access Key:', session.credentials.secretAccessKey ? 'Present' : 'Missing');
+        console.log('AWS Session Token:', session.credentials.sessionToken ? 'Present' : 'Missing');
+      }
+      
+      alert(`Auth Debug Complete - Check console for details. Credentials: ${!!session.credentials}`);
+    } catch (error) {
+      console.error('Auth debug error:', error);
+      alert(`Auth Debug Failed: ${error}`);
+    }
+  };
+
   return (
     <Authenticator>
       {({ signOut, user }) => (
@@ -196,6 +224,12 @@ export default function DeveloperDashboard() {
                     className="px-6 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700"
                   >
                     Test Fetch
+                  </button>
+                  <button
+                    onClick={debugAuth}
+                    className="px-6 py-2 rounded-md bg-orange-600 text-white hover:bg-orange-700"
+                  >
+                    Debug Auth
                   </button>
                 </div>
               </div>
