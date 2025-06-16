@@ -529,8 +529,8 @@ def db_test():
     try:
         print(f"[{time.time()}] Starting db-test endpoint")
         
-        print(f"[{time.time()}] Initializing database...")
-        init_database()
+        print(f"[{time.time()}] Initializing database with pure SSM...")
+        init_database_pure_ssm()
         
         print(f"[{time.time()}] Creating database session...")
         db = SessionLocal()
@@ -545,9 +545,10 @@ def db_test():
         print(f"[{time.time()}] db-test completed successfully")
         
         return {
-            "status": "database connected", 
+            "status": "database connected via pure SSM", 
             "result": result,
             "environment": env,
+            "method": "SSM Parameter Store only",
             "timestamp": time.time()
         }
     except Exception as e:

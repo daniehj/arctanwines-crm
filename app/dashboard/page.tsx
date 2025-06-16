@@ -23,6 +23,7 @@ export default function DeveloperDashboard() {
   const endpoints = [
     { name: 'Health Check', path: '/health', method: 'GET' },
     { name: 'Database Test', path: '/db-test', method: 'GET' },
+    { name: 'Database Test Pure SSM', path: '/db-test-pure-ssm', method: 'GET' },
     { name: 'Config Debug', path: '/config-debug', method: 'GET' },
     { name: 'VPC Info', path: '/vpc-info', method: 'GET' },
     { name: 'Network Test', path: '/network-simple-test', method: 'GET' },
