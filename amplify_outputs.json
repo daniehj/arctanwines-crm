@@ -1,0 +1,21 @@
+{
+  "version": "1.4",
+  "auth": {
+    "user_pool_id": "eu-west-1_zGyN4f7YA",
+    "user_pool_client_id": "34jotc4tl1i9lmeqb9lmnq96dl",
+    "identity_pool_id": "eu-west-1:3022ae09-6fe2-4273-b2cf-95a4903198f5",
+    "aws_region": "eu-west-1",
+    "login_with": {
+      "email": true
+    },
+    "signup_verification_method": "code"
+  },
+  "api": {
+    "rest": {
+      "arctanwines-crm-api": {
+        "endpoint": "https://ddezqhodb8.execute-api.eu-west-1.amazonaws.com",
+        "region": "eu-west-1"
+      }
+    }
+  }
+}
