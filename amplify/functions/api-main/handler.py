@@ -761,5 +761,7 @@ def db_test_pure_ssm():
         print(f"[{time.time()}] db-test-pure-ssm failed with error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Pure SSM Database error: {str(e)}")
 
+
+
 # AWS Lambda handler
 handler = Mangum(app) 
