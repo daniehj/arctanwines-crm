@@ -3,12 +3,14 @@ import { auth } from './auth/resource.js';
 import { data } from './data/resource.js';
 import { sayHelloFunctionHandler } from './functions/say-hello/resource';
 import { apiMainFunction } from './functions/api-main/resource';
+import { dbMigrations } from './functions/db-migrations/resource';
 
 export const backend = defineBackend({
   auth,
   data,
   sayHelloFunctionHandler,
   apiMainFunction,
+  dbMigrations,
 });
 
 // Export the API configuration for the frontend
