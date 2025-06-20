@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # Import your models here
 from models.base import Base
+from models.wine_batch import WineBatch
 
 # This is the Alembic Config object
 config = context.config
