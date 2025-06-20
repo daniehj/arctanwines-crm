@@ -2,12 +2,13 @@ import json
 import os
 import time
 import socket
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 import boto3
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from database import db_service, WineBatch, WineBatchStatus
 
 # Initialize FastAPI app
 app = FastAPI(title="Arctan Wines CRM API")
@@ -763,6 +764,109 @@ def db_test_pure_ssm():
         raise HTTPException(status_code=500, detail=f"Pure SSM Database error: {str(e)}")
 
 
+
+# === Database Endpoints ===
+
+def get_db():
+    """Dependency to get database session"""
+    db = db_service.get_session()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.get("/db/test")
+def test_new_database():
+    """Test the new database service"""
+    try:
+        result = db_service.test_connection()
+        return {
+            "status": "success",
+            "database_test": result,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database test failed: {str(e)}")
+
+@app.get("/db/wine-batches")
+def list_wine_batches(db = Depends(get_db)):
+    """List all wine batches"""
+    try:
+        batches = db.query(WineBatch).all()
+        return {
+            "status": "success",
+            "count": len(batches),
+            "batches": [
+                {
+                    "id": batch.id,
+                    "batch_number": batch.batch_number,
+                    "wine_name": batch.wine_name,
+                    "producer": batch.producer,
+                    "total_bottles": batch.total_bottles,
+                    "status": batch.status.value,
+                    "total_cost_nok_ore": batch.total_cost_nok_ore,
+                    "target_price_nok_ore": batch.target_price_nok_ore,
+                    "created_at": batch.created_at.isoformat() if batch.created_at else None,
+                    "updated_at": batch.updated_at.isoformat() if batch.updated_at else None
+                }
+                for batch in batches
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch wine batches: {str(e)}")
+
+@app.post("/db/wine-batches")
+def create_wine_batch(
+    batch_number: str,
+    wine_name: str,
+    producer: str,
+    total_bottles: int,
+    total_cost_nok_ore: int = 0,
+    target_price_nok_ore: int = None,
+    db = Depends(get_db)
+):
+    """Create a new wine batch"""
+    try:
+        # Check if batch number already exists
+        existing = db.query(WineBatch).filter(WineBatch.batch_number == batch_number).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Batch number {batch_number} already exists")
+        
+        # Create new batch
+        new_batch = WineBatch(
+            batch_number=batch_number,
+            wine_name=wine_name,
+            producer=producer,
+            total_bottles=total_bottles,
+            total_cost_nok_ore=total_cost_nok_ore,
+            target_price_nok_ore=target_price_nok_ore,
+            status=WineBatchStatus.ORDERED
+        )
+        
+        db.add(new_batch)
+        db.commit()
+        db.refresh(new_batch)
+        
+        return {
+            "status": "success",
+            "message": "Wine batch created successfully",
+            "batch": {
+                "id": new_batch.id,
+                "batch_number": new_batch.batch_number,
+                "wine_name": new_batch.wine_name,
+                "producer": new_batch.producer,
+                "total_bottles": new_batch.total_bottles,
+                "status": new_batch.status.value,
+                "total_cost_nok_ore": new_batch.total_cost_nok_ore,
+                "target_price_nok_ore": new_batch.target_price_nok_ore,
+                "created_at": new_batch.created_at.isoformat() if new_batch.created_at else None
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create wine batch: {str(e)}")
 
 # AWS Lambda handler
 handler = Mangum(app) 

@@ -18,18 +18,16 @@ class BaseModel(Base):
     __abstract__ = True
     
     id = Column(
-        UUID(as_uuid=True), 
+        String(36), 
         primary_key=True, 
-        default=uuid.uuid4,
-        server_default=text("gen_random_uuid()"),
-        comment="Primary key using UUID"
+        default=lambda: str(uuid.uuid4()),
+        comment="Primary key using UUID as string"
     )
     
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
         default=datetime.utcnow,
-        server_default=func.now(),
         comment="Timestamp when record was created"
     )
     
@@ -38,7 +36,6 @@ class BaseModel(Base):
         nullable=False,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
-        server_default=func.now(),
         comment="Timestamp when record was last updated"
     )
     

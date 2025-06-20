@@ -85,6 +85,12 @@ def get_ssm_parameter(parameter_name):
 
 def get_database_url():
     """Get database URL from SSM parameters"""
+    # For local development, check environment variable first
+    local_db_url = os.environ.get('DATABASE_URL')
+    if local_db_url:
+        print(f"Using local database URL: {local_db_url}")
+        return local_db_url
+    
     try:
         db_host = get_ssm_parameter("database/host")
         db_port = get_ssm_parameter("database/port") or "5432"
@@ -95,8 +101,9 @@ def get_database_url():
         return f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     except Exception as e:
         print(f"Error getting database configuration: {str(e)}")
-        # Fallback to environment variable for local development
-        return os.environ.get('DATABASE_URL', 'postgresql+psycopg2://localhost/arctanwines_dev')
+        print("Falling back to local SQLite database")
+        # Fallback to local SQLite for development
+        return 'sqlite:///./arctanwines_local.db'
 
 def run_migrations_offline():
     """Run migrations in 'offline' mode."""
