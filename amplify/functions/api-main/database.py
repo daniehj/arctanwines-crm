@@ -27,14 +27,14 @@ class BaseModel(Base):
     )
     
     created_at = Column(
-        DateTime(timezone=True),
+        DateTime,
         nullable=False,
         default=datetime.utcnow,
         comment="Timestamp when record was created"
     )
     
     updated_at = Column(
-        DateTime(timezone=True),
+        DateTime,
         nullable=False,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
@@ -142,7 +142,8 @@ def get_database_url():
         db_user = get_ssm_parameter("database/username")
         db_password = get_ssm_parameter("database/password")
         
-        db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        # Use pg8000 instead of psycopg2 for Lambda compatibility
+        db_url = f"postgresql+pg8000://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         print(f"Using PostgreSQL database: {db_host}:{db_port}/{db_name}")
         return db_url
     except Exception as e:
@@ -188,8 +189,8 @@ class DatabaseService:
                 self.init_database()
             
             with self.engine.connect() as connection:
-                result = connection.execute(text("SELECT 1"))
-                return {"status": "connected", "result": result.scalar()}
+                result = connection.execute(text("SELECT 1")).scalar()
+                return {"status": "connected", "result": result}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
