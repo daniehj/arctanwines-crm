@@ -101,18 +101,21 @@ def create_test_database_with_fixtures():
                     try:
                         cursor.execute("""
                             INSERT INTO customers (
-                                id, organization_number, company_name, contact_person,
-                                email, phone, address, postal_code, city, vat_number,
-                                payment_terms_days, discount_percentage, customer_category,
-                                notes, created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                id, organization_number, name, customer_type, contact_person,
+                                email, phone, address_line1, postal_code, city, country, vat_number,
+                                payment_terms, credit_limit_nok_ore, marketing_consent,
+                                newsletter_subscription, preferred_language, notes, fiken_customer_id,
+                                active, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
-                            customer['id'], customer['organization_number'], customer['company_name'],
-                            customer['contact_person'], customer['email'], customer['phone'],
-                            customer['address'], customer['postal_code'], customer['city'],
-                            customer['vat_number'], customer['payment_terms_days'],
-                            customer['discount_percentage'], customer['customer_category'],
-                            customer['notes'], customer['created_at'], customer['updated_at']
+                            customer['id'], customer['organization_number'], customer['name'],
+                            customer['customer_type'], customer['contact_person'], customer['email'],
+                            customer['phone'], customer['address_line1'], customer['postal_code'],
+                            customer['city'], customer['country'], customer['vat_number'],
+                            customer['payment_terms'], customer['credit_limit_nok_ore'],
+                            customer['marketing_consent'], customer['newsletter_subscription'],
+                            customer['preferred_language'], customer['notes'], customer['fiken_customer_id'],
+                            customer['active'], customer['created_at'], customer['updated_at']
                         ))
                     except Exception as e:
                         print(f"⚠️  Error inserting customer: {e}")
@@ -176,7 +179,7 @@ def inspect_database(db_path):
         # Show sample customers if available
         if 'customers' in tables:
             print("\n👥 Sample customers:")
-            cursor.execute("SELECT company_name, customer_category FROM customers LIMIT 3")
+            cursor.execute("SELECT name, customer_type FROM customers LIMIT 3")
             for row in cursor.fetchall():
                 print(f"  • {row[0]} ({row[1]})")
                 
