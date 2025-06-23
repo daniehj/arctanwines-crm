@@ -37,6 +37,8 @@ export default function DatabaseDashboard() {
     { name: 'List Orders (Phase 3)', path: '/db/orders', method: 'GET' },
     { name: 'List Inventory (Phase 3)', path: '/db/inventory', method: 'GET' },
     { name: 'Low Stock Alerts (Phase 3)', path: '/db/inventory/low-stock', method: 'GET' },
+    { name: 'List Wine Batch Costs (Phase 3)', path: '/db/wine-batch-costs', method: 'GET' },
+    { name: 'List Order Items (Phase 3)', path: '/db/order-items', method: 'GET' },
   ];
 
 
@@ -163,10 +165,12 @@ export default function DatabaseDashboard() {
           case 'wine_inventory':
             endpoint = '/db/inventory';
             break;
-          case 'order_items':
           case 'wine_batch_costs':
-            // These tables don't have direct endpoints, so we assume they exist if the migration ran
-            throw new Error('No direct endpoint - will be created by migration');
+            endpoint = '/db/wine-batch-costs';
+            break;
+          case 'order_items':
+            endpoint = '/db/order-items';
+            break;
           default:
             endpoint = `/db/${schema.table.replace('_', '-')}`;
         }

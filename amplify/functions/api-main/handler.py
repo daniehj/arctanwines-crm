@@ -1342,7 +1342,7 @@ async def create_customer(request: Request):
                 preferred_delivery_method, payment_terms, credit_limit_nok_ore,
                 marketing_consent, newsletter_subscription, preferred_language,
                 notes, active, created_at, updated_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             customer_id,
             data['name'],
@@ -1633,6 +1633,227 @@ async def list_low_stock():
         conn.close()
         
         return {"low_stock_items": low_stock}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+# Wine Batch Costs endpoints
+@app.get("/db/wine-batch-costs")
+async def list_wine_batch_costs():
+    """List all wine batch costs for accounting and cost tracking"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT wbc.id, wbc.batch_id, wb.batch_number, wb.wine_name,
+                   wbc.cost_type, wbc.amount_ore, wbc.currency, 
+                   wbc.fiken_account_code, wbc.payment_date, wbc.allocation_method,
+                   wbc.invoice_reference, wbc.active, wbc.created_at, wbc.updated_at
+            FROM wine_batch_costs wbc
+            LEFT JOIN wine_batches wb ON wbc.batch_id = wb.id
+            WHERE wbc.active = true
+            ORDER BY wb.batch_number, wbc.cost_type, wbc.created_at
+        """)
+        
+        columns = ['id', 'batch_id', 'batch_number', 'wine_name', 
+                  'cost_type', 'amount_ore', 'currency',
+                  'fiken_account_code', 'payment_date', 'allocation_method',
+                  'invoice_reference', 'active', 'created_at', 'updated_at']
+        
+        costs = []
+        for row in cursor.fetchall():
+            cost = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    cost[col] = value.isoformat()
+                else:
+                    cost[col] = value
+            costs.append(cost)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"wine_batch_costs": costs}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/db/wine-batch-costs/{batch_id}")
+async def get_batch_costs(batch_id: str):
+    """Get all costs for a specific wine batch"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT wbc.id, wbc.batch_id, wb.batch_number, wb.wine_name,
+                   wbc.cost_type, wbc.amount_ore, wbc.currency, 
+                   wbc.fiken_account_code, wbc.payment_date, wbc.allocation_method,
+                   wbc.invoice_reference, wbc.active, wbc.created_at, wbc.updated_at
+            FROM wine_batch_costs wbc
+            LEFT JOIN wine_batches wb ON wbc.batch_id = wb.id
+            WHERE wbc.batch_id = %s AND wbc.active = true
+            ORDER BY wbc.cost_type, wbc.created_at
+        """, (batch_id,))
+        
+        columns = ['id', 'batch_id', 'batch_number', 'wine_name', 
+                  'cost_type', 'amount_ore', 'currency',
+                  'fiken_account_code', 'payment_date', 'allocation_method',
+                  'invoice_reference', 'active', 'created_at', 'updated_at']
+        
+        costs = []
+        for row in cursor.fetchall():
+            cost = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    cost[col] = value.isoformat()
+                else:
+                    cost[col] = value
+            costs.append(cost)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"batch_costs": costs}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+# Order Items endpoints
+@app.get("/db/order-items")
+async def list_order_items():
+    """List all order items across all orders"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT oi.id, oi.order_id, o.order_number, oi.wine_batch_id, oi.wine_id,
+                   oi.quantity, oi.unit_price_ore, oi.total_price_ore, 
+                   oi.wine_name, oi.producer, oi.vintage, oi.bottle_size_ml,
+                   oi.discount_percentage, oi.discount_ore, oi.notes,
+                   wb.batch_number, c.name as customer_name,
+                   oi.active, oi.created_at, oi.updated_at
+            FROM order_items oi
+            LEFT JOIN orders o ON oi.order_id = o.id
+            LEFT JOIN wine_batches wb ON oi.wine_batch_id = wb.id
+            LEFT JOIN customers c ON o.customer_id = c.id
+            WHERE oi.active = true
+            ORDER BY o.order_number, oi.wine_name, oi.created_at
+        """)
+        
+        columns = ['id', 'order_id', 'order_number', 'wine_batch_id', 'wine_id',
+                  'quantity', 'unit_price_ore', 'total_price_ore',
+                  'wine_name', 'producer', 'vintage', 'bottle_size_ml',
+                  'discount_percentage', 'discount_ore', 'notes',
+                  'batch_number', 'customer_name', 'active', 'created_at', 'updated_at']
+        
+        items = []
+        for row in cursor.fetchall():
+            item = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    item[col] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    item[col] = float(value)
+                else:
+                    item[col] = value
+            items.append(item)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"order_items": items}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/db/order-items/{order_id}")
+async def get_order_items(order_id: str):
+    """Get all items for a specific order"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT oi.id, oi.order_id, oi.wine_batch_id, oi.wine_id,
+                   oi.quantity, oi.unit_price_ore, oi.total_price_ore, 
+                   oi.wine_name, oi.producer, oi.vintage, oi.bottle_size_ml,
+                   oi.discount_percentage, oi.discount_ore, oi.notes,
+                   wb.batch_number, oi.active, oi.created_at, oi.updated_at
+            FROM order_items oi
+            LEFT JOIN wine_batches wb ON oi.wine_batch_id = wb.id
+            WHERE oi.order_id = %s AND oi.active = true
+            ORDER BY oi.wine_name, oi.created_at
+        """, (order_id,))
+        
+        columns = ['id', 'order_id', 'wine_batch_id', 'wine_id',
+                  'quantity', 'unit_price_ore', 'total_price_ore',
+                  'wine_name', 'producer', 'vintage', 'bottle_size_ml',
+                  'discount_percentage', 'discount_ore', 'notes',
+                  'batch_number', 'active', 'created_at', 'updated_at']
+        
+        items = []
+        for row in cursor.fetchall():
+            item = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    item[col] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    item[col] = float(value)
+                else:
+                    item[col] = value
+            items.append(item)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"order_items": items}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
