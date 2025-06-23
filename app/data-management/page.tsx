@@ -40,11 +40,33 @@ interface WineBatchForm {
   target_price_nok_ore: number;
 }
 
+interface CustomerForm {
+  name: string;
+  customer_type: string;
+  email: string;
+  phone: string;
+  address_line1: string;
+  address_line2: string;
+  postal_code: string;
+  city: string;
+  country: string;
+  organization_number: string;
+  vat_number: string;
+  preferred_delivery_method: string;
+  payment_terms: number;
+  credit_limit_nok_ore: number;
+  marketing_consent: boolean;
+  newsletter_subscription: boolean;
+  preferred_language: string;
+  notes: string;
+}
+
 export default function DataManagement() {
-  const [activeTab, setActiveTab] = useState<'suppliers' | 'wines' | 'batches'>('suppliers');
+  const [activeTab, setActiveTab] = useState<'suppliers' | 'wines' | 'batches' | 'customers'>('suppliers');
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [wines, setWines] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [supplierForm, setSupplierForm] = useState<SupplierForm>({
@@ -81,6 +103,27 @@ export default function DataManagement() {
     target_price_nok_ore: 0
   });
 
+  const [customerForm, setCustomerForm] = useState<CustomerForm>({
+    name: '',
+    customer_type: 'individual',
+    email: '',
+    phone: '',
+    address_line1: '',
+    address_line2: '',
+    postal_code: '',
+    city: '',
+    country: 'Norway',
+    organization_number: '',
+    vat_number: '',
+    preferred_delivery_method: '',
+    payment_terms: 0,
+    credit_limit_nok_ore: 0,
+    marketing_consent: false,
+    newsletter_subscription: false,
+    preferred_language: 'no',
+    notes: ''
+  });
+
   const loadData = async () => {
     try {
       // Load suppliers
@@ -106,6 +149,19 @@ export default function DataManagement() {
       }).response;
       const batchesData = await batchesResponse.body.json();
       setBatches((batchesData as any)?.wine_batches || []);
+
+      // Load customers
+      try {
+        const customersResponse = await get({
+          apiName: 'arctanwines-crm-api',
+          path: '/db/customers'
+        }).response;
+        const customersData = await customersResponse.body.json();
+        setCustomers((customersData as any)?.customers || []);
+      } catch (customerError) {
+        console.error('Error loading customers (Phase 3 feature):', customerError);
+        setCustomers([]);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -199,6 +255,39 @@ export default function DataManagement() {
       alert('Wine batch created successfully!');
     } catch (error: any) {
       alert(`Failed to create wine batch: ${error.message || error}`);
+    }
+    setIsSubmitting(false);
+  };
+
+  const createCustomer = async () => {
+    setIsSubmitting(true);
+    try {
+      const response = await post({
+        apiName: 'arctanwines-crm-api',
+        path: '/db/customers',
+        options: {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(customerForm)
+        },
+      }).response;
+
+      await response.body.json();
+      
+      // Reset form
+      setCustomerForm({
+        name: '', customer_type: 'individual', email: '', phone: '',
+        address_line1: '', address_line2: '', postal_code: '', city: '',
+        country: 'Norway', organization_number: '', vat_number: '',
+        preferred_delivery_method: '', payment_terms: 0, credit_limit_nok_ore: 0,
+        marketing_consent: false, newsletter_subscription: false,
+        preferred_language: 'no', notes: ''
+      });
+      
+      // Reload data
+      await loadData();
+      alert('Customer created successfully!');
+    } catch (error: any) {
+      alert(`Failed to create customer: ${error.message || error}`);
     }
     setIsSubmitting(false);
   };

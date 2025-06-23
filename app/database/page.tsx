@@ -33,6 +33,10 @@ export default function DatabaseDashboard() {
     { name: 'List Wine Batches', path: '/db/wine-batches', method: 'GET' },
     { name: 'List Suppliers', path: '/db/suppliers', method: 'GET' },
     { name: 'List Wines', path: '/db/wines', method: 'GET' },
+    { name: 'List Customers (Phase 3)', path: '/db/customers', method: 'GET' },
+    { name: 'List Orders (Phase 3)', path: '/db/orders', method: 'GET' },
+    { name: 'List Inventory (Phase 3)', path: '/db/inventory', method: 'GET' },
+    { name: 'Low Stock Alerts (Phase 3)', path: '/db/inventory/low-stock', method: 'GET' },
   ];
 
   const expectedSchema = [
@@ -50,11 +54,23 @@ export default function DatabaseDashboard() {
     },
     {
       table: 'wine_inventory',
-      columns: ['id', 'wine_id', 'batch_id', 'quantity_available', 'cost_per_bottle_ore', 'selling_price_ore', 'minimum_stock_level', 'location', 'best_before_date', 'active', 'created_at', 'updated_at']
+      columns: ['id', 'wine_id', 'batch_id', 'quantity_available', 'quantity_reserved', 'quantity_sold', 'cost_per_bottle_ore', 'selling_price_ore', 'markup_percentage', 'margin_per_bottle_ore', 'minimum_stock_level', 'location', 'best_before_date', 'low_stock_alert', 'active', 'created_at', 'updated_at']
     },
     {
       table: 'wine_batch_costs',
       columns: ['id', 'batch_id', 'cost_type', 'amount_ore', 'currency', 'fiken_account_code', 'payment_date', 'allocation_method', 'invoice_reference', 'active', 'created_at', 'updated_at']
+    },
+    {
+      table: 'customers',
+      columns: ['id', 'name', 'customer_type', 'email', 'phone', 'address_line1', 'address_line2', 'postal_code', 'city', 'country', 'organization_number', 'vat_number', 'preferred_delivery_method', 'payment_terms', 'credit_limit_nok_ore', 'marketing_consent', 'newsletter_subscription', 'preferred_language', 'notes', 'fiken_customer_id', 'active', 'created_at', 'updated_at']
+    },
+    {
+      table: 'orders',
+      columns: ['id', 'order_number', 'customer_id', 'status', 'payment_status', 'order_date', 'requested_delivery_date', 'confirmed_delivery_date', 'delivered_date', 'delivery_method', 'delivery_address_line1', 'delivery_address_line2', 'delivery_postal_code', 'delivery_city', 'delivery_country', 'delivery_notes', 'subtotal_ore', 'delivery_fee_ore', 'discount_ore', 'vat_ore', 'total_ore', 'payment_terms', 'payment_due_date', 'customer_notes', 'internal_notes', 'fiken_order_id', 'fiken_invoice_number', 'active', 'created_at', 'updated_at']
+    },
+    {
+      table: 'order_items',
+      columns: ['id', 'order_id', 'wine_batch_id', 'wine_id', 'quantity', 'unit_price_ore', 'total_price_ore', 'wine_name', 'producer', 'vintage', 'bottle_size_ml', 'discount_percentage', 'discount_ore', 'notes', 'active', 'created_at', 'updated_at']
     }
   ];
 

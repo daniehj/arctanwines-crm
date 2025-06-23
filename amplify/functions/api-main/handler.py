@@ -1077,5 +1077,394 @@ async def create_wine(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
+# Phase 3: Customer Management endpoints
+@app.get("/db/customers")
+async def list_customers():
+    """List all customers"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, name, customer_type, email, phone, address_line1, 
+                   city, country, organization_number, vat_number,
+                   preferred_delivery_method, payment_terms, credit_limit_nok_ore,
+                   marketing_consent, newsletter_subscription, preferred_language,
+                   active, created_at, updated_at
+            FROM customers 
+            WHERE active = true
+            ORDER BY name
+        """)
+        
+        columns = ['id', 'name', 'customer_type', 'email', 'phone', 'address_line1',
+                  'city', 'country', 'organization_number', 'vat_number',
+                  'preferred_delivery_method', 'payment_terms', 'credit_limit_nok_ore',
+                  'marketing_consent', 'newsletter_subscription', 'preferred_language',
+                  'active', 'created_at', 'updated_at']
+        
+        customers = []
+        for row in cursor.fetchall():
+            customer = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, datetime):
+                    customer[col] = value.isoformat()
+                else:
+                    customer[col] = value
+            customers.append(customer)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"customers": customers}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/db/customers")
+async def create_customer(request: Request):
+    """Create a new customer"""
+    try:
+        data = await request.json()
+        
+        # Validate required fields
+        required_fields = ['name', 'customer_type']
+        for field in required_fields:
+            if field not in data:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        # Validate customer type
+        valid_types = ['individual', 'restaurant', 'retailer', 'distributor']
+        if data['customer_type'] not in valid_types:
+            raise HTTPException(status_code=400, detail=f"Invalid customer_type. Must be one of: {', '.join(valid_types)}")
+        
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        # Generate UUID for customer
+        customer_id = str(uuid.uuid4())
+        
+        cursor.execute("""
+            INSERT INTO customers (
+                id, name, customer_type, email, phone, address_line1, address_line2,
+                postal_code, city, country, organization_number, vat_number,
+                preferred_delivery_method, payment_terms, credit_limit_nok_ore,
+                marketing_consent, newsletter_subscription, preferred_language,
+                notes, active, created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            customer_id,
+            data['name'],
+            data['customer_type'],
+            data.get('email'),
+            data.get('phone'),
+            data.get('address_line1'),
+            data.get('address_line2'),
+            data.get('postal_code'),
+            data.get('city'),
+            data.get('country', 'Norway'),
+            data.get('organization_number'),
+            data.get('vat_number'),
+            data.get('preferred_delivery_method'),
+            data.get('payment_terms', 0),
+            data.get('credit_limit_nok_ore', 0),
+            data.get('marketing_consent', False),
+            data.get('newsletter_subscription', False),
+            data.get('preferred_language', 'no'),
+            data.get('notes'),
+            True,
+            datetime.now(),
+            datetime.now()
+        ))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {
+            "message": "Customer created successfully",
+            "customer_id": customer_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+# Phase 3: Order Management endpoints
+@app.get("/db/orders")
+async def list_orders():
+    """List all orders with customer information"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT o.id, o.order_number, o.customer_id, c.name as customer_name,
+                   o.status, o.payment_status, o.order_date, o.requested_delivery_date,
+                   o.delivery_method, o.delivery_city, o.subtotal_ore, o.delivery_fee_ore,
+                   o.discount_ore, o.vat_ore, o.total_ore, o.payment_terms,
+                   o.customer_notes, o.internal_notes, o.active, o.created_at, o.updated_at
+            FROM orders o
+            LEFT JOIN customers c ON o.customer_id = c.id
+            WHERE o.active = true
+            ORDER BY o.order_date DESC, o.order_number
+        """)
+        
+        columns = ['id', 'order_number', 'customer_id', 'customer_name',
+                  'status', 'payment_status', 'order_date', 'requested_delivery_date',
+                  'delivery_method', 'delivery_city', 'subtotal_ore', 'delivery_fee_ore',
+                  'discount_ore', 'vat_ore', 'total_ore', 'payment_terms',
+                  'customer_notes', 'internal_notes', 'active', 'created_at', 'updated_at']
+        
+        orders = []
+        for row in cursor.fetchall():
+            order = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, datetime):
+                    order[col] = value.isoformat()
+                elif isinstance(value, date):
+                    order[col] = value.isoformat()
+                else:
+                    order[col] = value
+            orders.append(order)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"orders": orders}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/db/orders/{order_id}")
+async def get_order_details(order_id: str):
+    """Get detailed order information including items"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        # Get order details
+        cursor.execute("""
+            SELECT o.id, o.order_number, o.customer_id, c.name as customer_name, c.email as customer_email,
+                   o.status, o.payment_status, o.order_date, o.requested_delivery_date,
+                   o.confirmed_delivery_date, o.delivered_date, o.delivery_method,
+                   o.delivery_address_line1, o.delivery_address_line2, o.delivery_postal_code,
+                   o.delivery_city, o.delivery_country, o.delivery_notes,
+                   o.subtotal_ore, o.delivery_fee_ore, o.discount_ore, o.vat_ore, o.total_ore,
+                   o.payment_terms, o.payment_due_date, o.customer_notes, o.internal_notes,
+                   o.fiken_order_id, o.fiken_invoice_number, o.active, o.created_at, o.updated_at
+            FROM orders o
+            LEFT JOIN customers c ON o.customer_id = c.id
+            WHERE o.id = %s AND o.active = true
+        """, (order_id,))
+        
+        order_row = cursor.fetchone()
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order_columns = ['id', 'order_number', 'customer_id', 'customer_name', 'customer_email',
+                        'status', 'payment_status', 'order_date', 'requested_delivery_date',
+                        'confirmed_delivery_date', 'delivered_date', 'delivery_method',
+                        'delivery_address_line1', 'delivery_address_line2', 'delivery_postal_code',
+                        'delivery_city', 'delivery_country', 'delivery_notes',
+                        'subtotal_ore', 'delivery_fee_ore', 'discount_ore', 'vat_ore', 'total_ore',
+                        'payment_terms', 'payment_due_date', 'customer_notes', 'internal_notes',
+                        'fiken_order_id', 'fiken_invoice_number', 'active', 'created_at', 'updated_at']
+        
+        order = {}
+        for i, col in enumerate(order_columns):
+            value = order_row[i]
+            if isinstance(value, (datetime, date)):
+                order[col] = value.isoformat()
+            else:
+                order[col] = value
+        
+        # Get order items
+        cursor.execute("""
+            SELECT oi.id, oi.wine_batch_id, oi.wine_id, oi.quantity, oi.unit_price_ore,
+                   oi.total_price_ore, oi.wine_name, oi.producer, oi.vintage, oi.bottle_size_ml,
+                   oi.discount_percentage, oi.discount_ore, oi.notes, oi.created_at
+            FROM order_items oi
+            WHERE oi.order_id = %s AND oi.active = true
+            ORDER BY oi.created_at
+        """, (order_id,))
+        
+        item_columns = ['id', 'wine_batch_id', 'wine_id', 'quantity', 'unit_price_ore',
+                       'total_price_ore', 'wine_name', 'producer', 'vintage', 'bottle_size_ml',
+                       'discount_percentage', 'discount_ore', 'notes', 'created_at']
+        
+        items = []
+        for row in cursor.fetchall():
+            item = {}
+            for i, col in enumerate(item_columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    item[col] = value.isoformat()
+                else:
+                    item[col] = value
+            items.append(item)
+        
+        order['items'] = items
+        
+        cursor.close()
+        conn.close()
+        
+        return {"order": order}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+# Phase 3: Inventory Management endpoints
+@app.get("/db/inventory")
+async def list_inventory():
+    """List wine inventory with stock levels and margins"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT i.id, i.wine_id, w.name as wine_name, w.producer, w.vintage,
+                   i.batch_id, b.batch_number, i.quantity_available, i.quantity_reserved,
+                   i.quantity_sold, i.cost_per_bottle_ore, i.selling_price_ore,
+                   i.markup_percentage, i.margin_per_bottle_ore, i.minimum_stock_level,
+                   i.location, i.best_before_date, i.low_stock_alert,
+                   (i.quantity_available - i.quantity_reserved) as available_stock,
+                   i.active, i.created_at, i.updated_at
+            FROM wine_inventory i
+            LEFT JOIN wines w ON i.wine_id = w.id
+            LEFT JOIN wine_batches b ON i.batch_id = b.id
+            WHERE i.active = true
+            ORDER BY w.name, w.vintage, b.batch_number
+        """)
+        
+        columns = ['id', 'wine_id', 'wine_name', 'producer', 'vintage',
+                  'batch_id', 'batch_number', 'quantity_available', 'quantity_reserved',
+                  'quantity_sold', 'cost_per_bottle_ore', 'selling_price_ore',
+                  'markup_percentage', 'margin_per_bottle_ore', 'minimum_stock_level',
+                  'location', 'best_before_date', 'low_stock_alert', 'available_stock',
+                  'active', 'created_at', 'updated_at']
+        
+        inventory = []
+        for row in cursor.fetchall():
+            item = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    item[col] = value.isoformat()
+                else:
+                    item[col] = value
+            inventory.append(item)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"inventory": inventory}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/db/inventory/low-stock")
+async def list_low_stock():
+    """List inventory items with low stock alerts"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT i.id, i.wine_id, w.name as wine_name, w.producer, w.vintage,
+                   i.batch_id, b.batch_number, i.quantity_available, i.quantity_reserved,
+                   i.minimum_stock_level, (i.quantity_available - i.quantity_reserved) as available_stock,
+                   i.location, i.created_at, i.updated_at
+            FROM wine_inventory i
+            LEFT JOIN wines w ON i.wine_id = w.id
+            LEFT JOIN wine_batches b ON i.batch_id = b.id
+            WHERE i.active = true 
+            AND (i.quantity_available - i.quantity_reserved) <= i.minimum_stock_level
+            ORDER BY (i.quantity_available - i.quantity_reserved) ASC, w.name
+        """)
+        
+        columns = ['id', 'wine_id', 'wine_name', 'producer', 'vintage',
+                  'batch_id', 'batch_number', 'quantity_available', 'quantity_reserved',
+                  'minimum_stock_level', 'available_stock', 'location', 'created_at', 'updated_at']
+        
+        low_stock = []
+        for row in cursor.fetchall():
+            item = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    item[col] = value.isoformat()
+                else:
+                    item[col] = value
+            low_stock.append(item)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"low_stock_items": low_stock}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 # AWS Lambda handler
 handler = Mangum(app) 
