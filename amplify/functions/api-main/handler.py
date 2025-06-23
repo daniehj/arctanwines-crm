@@ -2,10 +2,12 @@ import json
 import os
 import time
 import socket
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 import boto3
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 # Initialize FastAPI app
 app = FastAPI(title="Arctan Wines CRM API")
@@ -22,6 +24,10 @@ app.add_middleware(
 # AWS clients
 ssm_client = boto3.client('ssm')
 secrets_client = boto3.client('secretsmanager')
+
+# Database globals
+engine = None
+SessionLocal = None
 
 def get_environment():
     """Determine environment"""
@@ -42,6 +48,101 @@ def get_environment():
         'test' in function_name.lower()):
         return 'test', env_info
     return 'prod', env_info
+
+def get_ssm_parameter(parameter_name):
+    """Get SSM parameter with fallback logic"""
+    env, env_info = get_environment()
+    
+    # First try environment variables
+    env_var_map = {
+        "database/host": "DATABASE_HOST",
+        "database/port": "DATABASE_PORT", 
+        "database/name": "DATABASE_NAME",
+        "database/username": "DATABASE_USERNAME",
+        "database/password": "DATABASE_PASSWORD"
+    }
+    
+    if parameter_name in env_var_map:
+        env_value = os.environ.get(env_var_map[parameter_name])
+        if env_value:
+            return env_value
+    
+    # Try SSM with multiple path variations
+    try:
+        paths_to_try = [
+            f"/amplify/arctanwines/{env}/{parameter_name}",
+            f"/amplify/arctanwines/{parameter_name}",
+            f"/amplify/arctan-wines/{env}/{parameter_name}",
+            f"/amplify/arctan-wines/{parameter_name}",
+            f"/amplify/{env}/{parameter_name}",
+            f"/amplify/{parameter_name}"
+        ]
+        
+        for path in paths_to_try:
+            try:
+                response = ssm_client.get_parameter(Name=path, WithDecryption=True)
+                return response['Parameter']['Value']
+            except:
+                continue
+        
+        raise Exception(f"Parameter {parameter_name} not found in any SSM path")
+        
+    except Exception as e:
+        # Final fallback to environment variable
+        env_var = parameter_name.upper().replace('-', '_').replace('/', '_')
+        env_value = os.environ.get(env_var)
+        if env_value:
+            return env_value
+        
+        raise Exception(f"Could not get parameter {parameter_name}: {str(e)}")
+
+def init_database():
+    """Initialize database connection"""
+    global engine, SessionLocal
+    
+    if engine is None:
+        try:
+            print(f"[{time.time()}] Initializing database...")
+            
+            # Get database configuration
+            db_host = get_ssm_parameter("database/host")
+            db_port = get_ssm_parameter("database/port") or "5432"
+            db_name = get_ssm_parameter("database/name")
+            db_user = get_ssm_parameter("database/username")
+            db_password = get_ssm_parameter("database/password")
+            
+            if not all([db_host, db_name, db_user, db_password]):
+                missing = [k for k, v in {
+                    "host": db_host, "name": db_name, 
+                    "username": db_user, "password": db_password
+                }.items() if not v]
+                raise Exception(f"Missing database config: {', '.join(missing)}")
+            
+            print(f"[{time.time()}] Connecting to: {db_host}:{db_port}/{db_name}")
+            
+            database_url = f"postgresql+pg8000://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+            
+            engine = create_engine(
+                database_url, 
+                echo=False,
+                pool_timeout=10,
+                pool_recycle=300,
+                pool_pre_ping=True,
+                connect_args={"timeout": 10}
+            )
+            
+            SessionLocal = sessionmaker(bind=engine)
+            print(f"[{time.time()}] Database initialization completed")
+            
+        except Exception as e:
+            print(f"[{time.time()}] Database init failed: {str(e)}")
+            raise Exception(f"Database initialization failed: {str(e)}")
+
+def get_db_session():
+    """Get database session"""
+    if SessionLocal is None:
+        init_database()
+    return SessionLocal()
 
 @app.get("/")
 def root():
@@ -322,6 +423,139 @@ def status():
         "lambda_function": os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown'),
         "aws_region": os.environ.get('AWS_REGION', 'unknown')
     }
+
+@app.get("/db/test")
+def test_database():
+    """Test database connection"""
+    try:
+        db = get_db_session()
+        result = db.execute(text("SELECT 1 as test")).scalar()
+        db.close()
+        
+        return {
+            "status": "success",
+            "database_test": result,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database test failed: {str(e)}")
+
+@app.get("/db/wine-batches")
+def list_wine_batches():
+    """List all wine batches"""
+    try:
+        db = get_db_session()
+        
+        # Simple raw SQL query to avoid complex ORM setup
+        result = db.execute(text("""
+            SELECT id, batch_number, wine_name, producer, total_bottles, 
+                   status, total_cost_nok_ore, target_price_nok_ore, 
+                   created_at, updated_at
+            FROM wine_batches 
+            ORDER BY created_at DESC
+        """))
+        
+        batches = []
+        for row in result:
+            batches.append({
+                "id": str(row.id),
+                "batch_number": row.batch_number,
+                "wine_name": row.wine_name,
+                "producer": row.producer,
+                "total_bottles": row.total_bottles,
+                "status": row.status,
+                "total_cost_nok_ore": row.total_cost_nok_ore,
+                "target_price_nok_ore": row.target_price_nok_ore,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None
+            })
+        
+        db.close()
+        
+        return {
+            "status": "success",
+            "count": len(batches),
+            "batches": batches
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch wine batches: {str(e)}")
+
+@app.post("/db/wine-batches")
+async def create_wine_batch(request: Request):
+    """Create a new wine batch using JSON body"""
+    try:
+        # Parse JSON body manually instead of using Pydantic
+        body = await request.json()
+        
+        # Validate required fields
+        required_fields = ["batch_number", "wine_name", "producer", "total_bottles"]
+        for field in required_fields:
+            if field not in body or not body[field]:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        db = get_db_session()
+        
+        # Check if batch number already exists
+        existing = db.execute(text(
+            "SELECT id FROM wine_batches WHERE batch_number = :batch_number"
+        ), {"batch_number": body["batch_number"]}).fetchone()
+        
+        if existing:
+            db.close()
+            raise HTTPException(status_code=400, detail=f"Batch number {body['batch_number']} already exists")
+        
+        # Insert new batch using raw SQL
+        import uuid
+        batch_id = str(uuid.uuid4())
+        
+        db.execute(text("""
+            INSERT INTO wine_batches 
+            (id, batch_number, wine_name, producer, total_bottles, status, 
+             total_cost_nok_ore, target_price_nok_ore, created_at, updated_at)
+            VALUES (:id, :batch_number, :wine_name, :producer, :total_bottles, :status,
+                    :total_cost_nok_ore, :target_price_nok_ore, NOW(), NOW())
+        """), {
+            "id": batch_id,
+            "batch_number": body["batch_number"],
+            "wine_name": body["wine_name"],
+            "producer": body["producer"],
+            "total_bottles": int(body["total_bottles"]),
+            "status": "ORDERED",
+            "total_cost_nok_ore": int(body.get("total_cost_nok_ore", 0)),
+            "target_price_nok_ore": int(body.get("target_price_nok_ore", 0))
+        })
+        
+        db.commit()
+        
+        # Fetch the created batch
+        created = db.execute(text("""
+            SELECT id, batch_number, wine_name, producer, total_bottles, 
+                   status, total_cost_nok_ore, target_price_nok_ore, created_at
+            FROM wine_batches WHERE id = :id
+        """), {"id": batch_id}).fetchone()
+        
+        db.close()
+        
+        return {
+            "status": "success",
+            "message": "Wine batch created successfully",
+            "batch": {
+                "id": str(created.id),
+                "batch_number": created.batch_number,
+                "wine_name": created.wine_name,
+                "producer": created.producer,
+                "total_bottles": created.total_bottles,
+                "status": created.status,
+                "total_cost_nok_ore": created.total_cost_nok_ore,
+                "target_price_nok_ore": created.target_price_nok_ore,
+                "created_at": created.created_at.isoformat() if created.created_at else None
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create wine batch: {str(e)}")
 
 # AWS Lambda handler
 handler = Mangum(app) 

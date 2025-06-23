@@ -15,17 +15,34 @@ interface TestResult {
   method?: string;
 }
 
-// Temporarily removed WineBatchForm interface
+interface WineBatchForm {
+  batch_number: string;
+  wine_name: string;
+  producer: string;
+  total_bottles: number;
+  total_cost_nok_ore: number;
+  target_price_nok_ore: number;
+}
 
 export default function DeveloperDashboard() {
   const [user, setUser] = useState<any>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [isRunningTests, setIsRunningTests] = useState(false);
-  // Temporarily removed wine batch form functionality
+  const [showBatchForm, setShowBatchForm] = useState(false);
+  const [batchForm, setBatchForm] = useState<WineBatchForm>({
+    batch_number: '',
+    wine_name: '',
+    producer: '',
+    total_bottles: 0,
+    total_cost_nok_ore: 0,
+    target_price_nok_ore: 0
+  });
 
   const endpoints = [
     { name: 'Health Check', path: '/health', method: 'GET' },
     { name: 'Status', path: '/status', method: 'GET' },
+    { name: 'Database Test', path: '/db/test', method: 'GET' },
+    { name: 'List Wine Batches', path: '/db/wine-batches', method: 'GET' },
     { name: 'Root Endpoint', path: '/', method: 'GET' },
     { name: 'Config Debug', path: '/config-debug', method: 'GET' },
     { name: 'VPC Info', path: '/vpc-info', method: 'GET' },
@@ -172,7 +189,45 @@ export default function DeveloperDashboard() {
     }
   };
 
-  // Temporarily removed wine batch creation function
+  // Create wine batch
+  const createWineBatch = async () => {
+    try {
+      console.log('Creating wine batch:', batchForm);
+      
+      const response = await post({
+        apiName: 'arctanwines-crm-api',
+        path: '/db/wine-batches',
+        options: {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(batchForm)
+        },
+      }).response;
+
+      const body = await response.body.json();
+      console.log('Wine batch created:', body);
+      
+      // Reset form and hide it
+      setBatchForm({
+        batch_number: '',
+        wine_name: '',
+        producer: '',
+        total_bottles: 0,
+        total_cost_nok_ore: 0,
+        target_price_nok_ore: 0
+      });
+      setShowBatchForm(false);
+      
+      // Refresh wine batches list
+      await runTest({ name: 'List Wine Batches', path: '/db/wine-batches', method: 'GET' });
+      
+      alert('Wine batch created successfully!');
+    } catch (error: any) {
+      console.error('Create wine batch error:', error);
+      alert(`Failed to create wine batch: ${error.message || error}`);
+    }
+  };
 
   return (
     <Authenticator>
@@ -239,12 +294,119 @@ export default function DeveloperDashboard() {
                   >
                     Debug Auth
                   </button>
-                  {/* Temporarily removed wine batch button */}
+                  <button
+                    onClick={() => setShowBatchForm(!showBatchForm)}
+                    className="px-6 py-2 rounded-md bg-green-600 text-white hover:bg-green-700"
+                  >
+                    {showBatchForm ? 'Hide' : 'Add'} Wine Batch
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Temporarily removed wine batch form */}
+            {/* Wine Batch Form */}
+            {showBatchForm && (
+              <div className="bg-white shadow rounded-lg mb-6">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-medium text-gray-900">Create Wine Batch</h2>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Batch Number *
+                      </label>
+                      <input
+                        type="text"
+                        value={batchForm.batch_number}
+                        onChange={(e) => setBatchForm({...batchForm, batch_number: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., ACEDIANO-2024-001"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Wine Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={batchForm.wine_name}
+                        onChange={(e) => setBatchForm({...batchForm, wine_name: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., ACEDIANO Monastrell"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Producer *
+                      </label>
+                      <input
+                        type="text"
+                        value={batchForm.producer}
+                        onChange={(e) => setBatchForm({...batchForm, producer: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Bodega Acediano"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Total Bottles *
+                      </label>
+                      <input
+                        type="number"
+                        value={batchForm.total_bottles}
+                        onChange={(e) => setBatchForm({...batchForm, total_bottles: parseInt(e.target.value) || 0})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 144"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Total Cost (NOK øre)
+                      </label>
+                      <input
+                        type="number"
+                        value={batchForm.total_cost_nok_ore}
+                        onChange={(e) => setBatchForm({...batchForm, total_cost_nok_ore: parseInt(e.target.value) || 0})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 84000 (840.00 NOK)"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Target Price (NOK øre per bottle)
+                      </label>
+                      <input
+                        type="number"
+                        value={batchForm.target_price_nok_ore}
+                        onChange={(e) => setBatchForm({...batchForm, target_price_nok_ore: parseInt(e.target.value) || 0})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 18000 (180.00 NOK)"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex space-x-3">
+                    <button
+                      onClick={createWineBatch}
+                      disabled={!batchForm.batch_number || !batchForm.wine_name || !batchForm.producer || !batchForm.total_bottles}
+                      className={`px-4 py-2 rounded-md text-white font-medium ${
+                        !batchForm.batch_number || !batchForm.wine_name || !batchForm.producer || !batchForm.total_bottles
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
+                    >
+                      Create Wine Batch
+                    </button>
+                    <button
+                      onClick={() => setShowBatchForm(false)}
+                      className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Individual Test Buttons */}
             <div className="bg-white shadow rounded-lg mb-6">
