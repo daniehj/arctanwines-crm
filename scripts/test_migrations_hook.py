@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Migration Testing Hook
-Tests migrations locally when models or migration files change
+Enhanced Migration Testing Hook
+- Detects model changes and provides guidance
+- Tests migrations locally when models or migration files change
+- Validates Lambda runtime compatibility
 """
 import os
 import sys
@@ -9,16 +11,44 @@ import subprocess
 import sqlite3
 import tempfile
 import shutil
+import re
 from pathlib import Path
 from datetime import datetime
+
+# Lambda-incompatible packages (binary/compiled extensions)
+LAMBDA_INCOMPATIBLE_PACKAGES = {
+    'pydantic-core': 'Use pydantic v1.x instead of v2.x (pydantic-core is a compiled extension)',
+    'psycopg2': 'Use psycopg2-binary instead (psycopg2 requires compilation)',
+    'lxml': 'Contains C extensions, use xml.etree.ElementTree or pure Python alternatives',
+    'pillow': 'Contains C extensions, consider using PIL alternatives or AWS Lambda layers',
+    'numpy': 'Large binary package, consider using AWS Lambda layers',
+    'pandas': 'Large binary package with C extensions, consider using AWS Lambda layers',
+    'scipy': 'Large binary package with C extensions, consider using AWS Lambda layers',
+    'matplotlib': 'Large binary package with C extensions, consider using AWS Lambda layers',
+    'opencv-python': 'Large binary package, use opencv-python-headless or Lambda layers',
+    'cryptography': 'Contains C extensions, may need specific versions for Lambda',
+    'pyodbc': 'Contains C extensions, use pure Python database drivers',
+    'mysqlclient': 'Contains C extensions, use PyMySQL instead',
+    'cx-Oracle': 'Contains C extensions, not compatible with Lambda',
+    'psycopg2-binary': '✅ OK - This is the Lambda-compatible version',
+    'pg8000': '✅ OK - Pure Python PostgreSQL driver',
+    'PyMySQL': '✅ OK - Pure Python MySQL driver',
+    'boto3': '✅ OK - AWS SDK for Python',
+    'requests': '✅ OK - Pure Python HTTP library',
+    'sqlalchemy': '✅ OK - Pure Python ORM (with compatible drivers)',
+    'alembic': '✅ OK - Pure Python migration tool',
+    'pydantic': '✅ OK - Pure Python data validation (v1.x)',
+}
 
 def detect_changes(changed_files):
     """Detect what type of changes occurred"""
     changes = {
         'models': [],
         'migrations': [],
+        'requirements': [],
         'has_model_changes': False,
-        'has_migration_changes': False
+        'has_migration_changes': False,
+        'has_requirements_changes': False
     }
     
     for file_path in changed_files:
@@ -28,8 +58,209 @@ def detect_changes(changed_files):
         elif 'alembic/versions/' in file_path and file_path.endswith('.py'):
             changes['migrations'].append(file_path)
             changes['has_migration_changes'] = True
+        elif file_path.endswith('requirements.txt') or file_path.endswith('pyproject.toml'):
+            changes['requirements'].append(file_path)
+            changes['has_requirements_changes'] = True
     
     return changes
+
+def check_lambda_compatibility():
+    """Check for Lambda-incompatible packages in requirements"""
+    print("\n🔍 Checking Lambda Runtime Compatibility...")
+    
+    issues = []
+    warnings = []
+    
+    # Check requirements.txt files
+    requirements_files = [
+        'requirements.txt',
+        'amplify/functions/api-main/requirements.txt',
+        'amplify/functions/db-migrations/requirements.txt'
+    ]
+    
+    for req_file in requirements_files:
+        if not Path(req_file).exists():
+            continue
+            
+        print(f"📄 Checking {req_file}...")
+        
+        try:
+            with open(req_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            for line_num, line in enumerate(lines, 1):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                
+                # Extract package name (handle version specifiers)
+                package_name = re.split(r'[>=<!=~]', line)[0].strip()
+                
+                if package_name in LAMBDA_INCOMPATIBLE_PACKAGES:
+                    message = LAMBDA_INCOMPATIBLE_PACKAGES[package_name]
+                    
+                    if message.startswith('✅ OK'):
+                        print(f"  ✅ {package_name}: {message}")
+                    elif 'consider using' in message.lower() or 'may need' in message.lower():
+                        warnings.append(f"{req_file}:{line_num} - {package_name}: {message}")
+                        print(f"  ⚠️  {package_name}: {message}")
+                    else:
+                        issues.append(f"{req_file}:{line_num} - {package_name}: {message}")
+                        print(f"  ❌ {package_name}: {message}")
+                
+        except Exception as e:
+            print(f"⚠️  Error reading {req_file}: {e}")
+    
+    # Report results
+    if issues:
+        print(f"\n❌ Found {len(issues)} Lambda compatibility issues:")
+        for issue in issues:
+            print(f"   • {issue}")
+        print("\n💡 These packages will likely cause Lambda deployment failures.")
+        return False
+    
+    if warnings:
+        print(f"\n⚠️  Found {len(warnings)} potential Lambda compatibility concerns:")
+        for warning in warnings:
+            print(f"   • {warning}")
+        print("\n💡 These packages may work but could cause size or performance issues.")
+    
+    if not issues and not warnings:
+        print("✅ No obvious Lambda compatibility issues found")
+    
+    return True
+
+def analyze_model_changes(model_files):
+    """Analyze what changed in model files"""
+    print(f"\n🔍 Analyzing {len(model_files)} model file(s)...")
+    
+    changes_detected = []
+    
+    for model_file in model_files:
+        print(f"📄 {model_file}")
+        
+        # Try to detect what changed using git diff
+        try:
+            result = subprocess.run([
+                'git', 'diff', '--cached', model_file
+            ], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            
+            if result.returncode == 0:
+                diff_content = result.stdout
+                
+                # Look for common model changes
+                if 'class ' in diff_content and '+' in diff_content:
+                    changes_detected.append(f"New model class in {model_file}")
+                if 'Column(' in diff_content and '+' in diff_content:
+                    changes_detected.append(f"New column(s) in {model_file}")
+                if 'relationship(' in diff_content and '+' in diff_content:
+                    changes_detected.append(f"New relationship(s) in {model_file}")
+                if '__tablename__' in diff_content and '+' in diff_content:
+                    changes_detected.append(f"New table in {model_file}")
+                
+        except Exception as e:
+            print(f"   ⚠️  Could not analyze changes: {e}")
+    
+    return changes_detected
+
+def check_migration_status():
+    """Check if migrations exist for model changes"""
+    print("\n🔍 Checking migration status...")
+    
+    try:
+        # Check if there are any migration files
+        migration_dir = Path("amplify/functions/db-migrations/alembic/versions")
+        if not migration_dir.exists():
+            print("❌ Migration directory not found")
+            return False
+        
+        migrations = list(migration_dir.glob("*.py"))
+        migrations = [m for m in migrations if not m.name.startswith("__")]
+        
+        print(f"📊 Found {len(migrations)} existing migrations")
+        
+        # Check if there are uncommitted migrations
+        try:
+            result = subprocess.run([
+                'git', 'diff', '--cached', '--name-only'
+            ], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            
+            if result.returncode == 0:
+                staged_files = result.stdout.strip().split('\n')
+                staged_migrations = [f for f in staged_files if 'alembic/versions/' in f and f.endswith('.py')]
+                
+                if staged_migrations:
+                    print(f"✅ Found {len(staged_migrations)} new migration(s) staged for commit:")
+                    for migration in staged_migrations:
+                        print(f"   📄 {migration}")
+                    return True
+                else:
+                    print("⚠️  No new migrations found in staged files")
+                    return False
+        
+        except Exception as e:
+            print(f"⚠️  Could not check staged migrations: {e}")
+            return False
+    
+    except Exception as e:
+        print(f"❌ Error checking migration status: {e}")
+        return False
+
+def provide_migration_guidance(has_model_changes, has_migration_changes, model_changes):
+    """Provide guidance based on detected changes"""
+    print("\n" + "="*60)
+    print("🎯 MIGRATION WORKFLOW GUIDANCE")
+    print("="*60)
+    
+    if has_model_changes and not has_migration_changes:
+        print("📋 MODEL CHANGES DETECTED - MIGRATION REQUIRED")
+        print()
+        print("🔍 Detected changes:")
+        for change in model_changes:
+            print(f"   • {change}")
+        print()
+        print("🚨 NEXT STEPS REQUIRED:")
+        print("   1. Generate migration for your model changes:")
+        print("      cd amplify/functions/db-migrations")
+        print("      python -m alembic revision --autogenerate -m \"Your migration description\"")
+        print()
+        print("   2. Review the generated migration file:")
+        print("      - Check that it captures your intended changes")
+        print("      - Verify column types and constraints")
+        print("      - Add any custom logic if needed")
+        print()
+        print("   3. Test the migration locally:")
+        print("      python ../../../scripts/manual_migration_test.py")
+        print()
+        print("   4. Add the migration file to git:")
+        print("      git add alembic/versions/[new_migration_file].py")
+        print()
+        print("   5. Commit both model and migration changes:")
+        print("      git commit -m \"Add [description] with migration\"")
+        print()
+        print("❌ COMMIT BLOCKED: Please generate migration first!")
+        return False
+    
+    elif has_model_changes and has_migration_changes:
+        print("✅ MODEL + MIGRATION CHANGES DETECTED")
+        print()
+        print("🔍 Detected changes:")
+        for change in model_changes:
+            print(f"   • {change}")
+        print()
+        print("🧪 Testing migration compatibility...")
+        return True  # Proceed with testing
+    
+    elif not has_model_changes and has_migration_changes:
+        print("🔄 MIGRATION-ONLY CHANGES DETECTED")
+        print()
+        print("🧪 Testing migration...")
+        return True  # Proceed with testing
+    
+    else:
+        print("ℹ️  No model or migration changes detected")
+        print("✅ Proceeding with other checks...")
+        return True
 
 def create_test_database():
     """Create a temporary SQLite database for testing"""
@@ -332,48 +563,99 @@ def cleanup_test_environment(temp_dir):
         print(f"⚠️  Warning: Could not clean up {temp_dir}: {e}")
 
 def main():
-    if len(sys.argv) < 2:
-        print("❌ No files provided to check")
-        sys.exit(1)
+    """Main hook function"""
+    print("🔧 Enhanced Migration Testing Hook")
+    print(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*60)
     
-    changed_files = sys.argv[1:]
+    # Get changed files from git
+    try:
+        result = subprocess.run([
+            'git', 'diff', '--cached', '--name-only'
+        ], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+        
+        if result.returncode != 0:
+            print("❌ Could not get changed files from git")
+            return 1
+        
+        changed_files = result.stdout.strip().split('\n')
+        changed_files = [f for f in changed_files if f]  # Remove empty strings
+        
+    except Exception as e:
+        print(f"❌ Error getting changed files: {e}")
+        return 1
+    
+    if not changed_files:
+        print("ℹ️  No files changed, skipping migration checks")
+        return 0
+    
+    print(f"📁 Checking {len(changed_files)} changed file(s)...")
+    
+    # Detect what types of changes occurred
     changes = detect_changes(changed_files)
     
-    print("🔍 Migration Test Hook")
-    print(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"📁 Changed files: {len(changed_files)}")
+    # Check Lambda compatibility for requirements changes
+    if changes['has_requirements_changes']:
+        if not check_lambda_compatibility():
+            print("\n❌ Lambda compatibility issues found!")
+            print("💡 Fix the package issues before committing")
+            return 1
     
-    if changes['has_model_changes']:
-        print(f"🔧 Model changes detected: {changes['models']}")
-    
-    if changes['has_migration_changes']:
-        print(f"📜 Migration changes detected: {changes['migrations']}")
-    
-    if not (changes['has_model_changes'] or changes['has_migration_changes']):
-        print("ℹ️  No relevant changes detected, skipping migration test")
-        return
-    
-    # Create test environment
-    db_path, temp_dir = create_test_database()
-    
-    try:
-        # Run the migration test
-        if not run_migration_test(db_path):
-            print("❌ Migration test failed - commit blocked")
-            sys.exit(1)
+    # Handle model and migration changes
+    if changes['has_model_changes'] or changes['has_migration_changes']:
         
-        # Populate with test data
-        populate_test_fixtures(db_path)
+        # Analyze model changes
+        model_changes = []
+        if changes['has_model_changes']:
+            model_changes = analyze_model_changes(changes['models'])
         
-        # Validate schema
-        if not validate_database_schema(db_path):
-            print("❌ Schema validation failed - commit blocked")
-            sys.exit(1)
+        # Provide guidance and check if we should proceed
+        should_proceed = provide_migration_guidance(
+            changes['has_model_changes'], 
+            changes['has_migration_changes'],
+            model_changes
+        )
         
-        print("🎉 All migration tests passed!")
+        if not should_proceed:
+            return 1
         
-    finally:
-        cleanup_test_environment(temp_dir)
+        # If we have migrations to test, run the tests
+        if changes['has_migration_changes']:
+            print("\n🧪 TESTING MIGRATIONS...")
+            
+            # Create test database
+            db_path, temp_dir = create_test_database()
+            
+            try:
+                # Run migrations
+                if not run_migration_test(db_path):
+                    print("\n❌ Migration test failed!")
+                    return 1
+                
+                # Populate test data
+                populate_test_fixtures(db_path)
+                
+                # Validate schema
+                if not validate_database_schema(db_path):
+                    print("\n❌ Schema validation failed!")
+                    return 1
+                
+                print("\n✅ All migration tests passed!")
+                
+            finally:
+                cleanup_test_environment(temp_dir)
+    
+    # Final Lambda compatibility check
+    if not check_lambda_compatibility():
+        print("\n⚠️  Lambda compatibility warnings detected")
+        print("💡 Review the warnings above before deploying")
+        # Don't fail on warnings, just inform
+    
+    print("\n" + "="*60)
+    print("✅ PRE-COMMIT CHECKS COMPLETED SUCCESSFULLY")
+    print("="*60)
+    
+    return 0
 
 if __name__ == "__main__":
-    main() 
+    sys.exit(main()) 

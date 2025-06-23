@@ -9,11 +9,11 @@ repos:
         pass_filenames: false
         
       - id: test-migrations-on-model-changes
-        name: Test Migrations on Model Changes
+        name: Enhanced Migration Testing & Lambda Compatibility
         entry: python scripts/test_migrations_hook.py
         language: system
-        files: '^amplify/functions/db-migrations/models/.*\.py$|^amplify/functions/db-migrations/alembic/versions/.*\.py$'
-        pass_filenames: true
+        files: '^amplify/functions/db-migrations/models/.*\.py$|^amplify/functions/db-migrations/alembic/versions/.*\.py$|.*requirements\.txt$|.*pyproject\.toml$'
+        pass_filenames: false
         
   - repo: https://github.com/psf/black
     rev: 23.7.0
