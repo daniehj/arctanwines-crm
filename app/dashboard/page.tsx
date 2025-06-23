@@ -42,6 +42,7 @@ export default function DeveloperDashboard() {
     { name: 'Health Check', path: '/health', method: 'GET' },
     { name: 'Status', path: '/status', method: 'GET' },
     { name: 'Database Test', path: '/db/test', method: 'GET' },
+    { name: 'Run Migrations', path: '/db/migrate', method: 'POST' },
     { name: 'List Wine Batches', path: '/db/wine-batches', method: 'GET' },
     { name: 'Root Endpoint', path: '/', method: 'GET' },
     { name: 'Config Debug', path: '/config-debug', method: 'GET' },

@@ -8,6 +8,9 @@ from mangum import Mangum
 import boto3
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+import uuid
+import subprocess
+from pathlib import Path
 
 # Initialize FastAPI app
 app = FastAPI(title="Arctan Wines CRM API")
@@ -505,7 +508,6 @@ async def create_wine_batch(request: Request):
             raise HTTPException(status_code=400, detail=f"Batch number {body['batch_number']} already exists")
         
         # Insert new batch using raw SQL
-        import uuid
         batch_id = str(uuid.uuid4())
         
         db.execute(text("""
@@ -556,6 +558,70 @@ async def create_wine_batch(request: Request):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create wine batch: {str(e)}")
+
+@app.post("/db/migrate")
+def run_migrations():
+    """Run database migrations"""
+    try:
+        # Try to create the wine_batches table manually as a fallback
+        db = get_db_session()
+        
+        # Check if table exists
+        table_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'wine_batches'
+            );
+        """)).scalar()
+        
+        if not table_exists:
+            print("Creating wine_batches table...")
+            
+            # Create the table manually (based on our migration)
+            db.execute(text("""
+                CREATE TABLE wine_batches (
+                    id VARCHAR(36) PRIMARY KEY,
+                    batch_number VARCHAR(50) NOT NULL UNIQUE,
+                    wine_name VARCHAR(200) NOT NULL,
+                    producer VARCHAR(200) NOT NULL,
+                    total_bottles INTEGER NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'ORDERED',
+                    total_cost_nok_ore INTEGER NOT NULL DEFAULT 0,
+                    target_price_nok_ore INTEGER,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            # Create indexes
+            db.execute(text("""
+                CREATE INDEX idx_wine_batch_status ON wine_batches(status);
+                CREATE UNIQUE INDEX ix_wine_batches_batch_number ON wine_batches(batch_number);
+                CREATE INDEX ix_wine_batches_wine_name ON wine_batches(wine_name);
+            """))
+            
+            db.commit()
+            print("wine_batches table created successfully")
+            
+            db.close()
+            
+            return {
+                "status": "success",
+                "message": "Database migrations completed - wine_batches table created",
+                "table_created": True
+            }
+        else:
+            db.close()
+            return {
+                "status": "success", 
+                "message": "Database is up to date - wine_batches table already exists",
+                "table_created": False
+            }
+            
+    except Exception as e:
+        print(f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 # AWS Lambda handler
 handler = Mangum(app) 
