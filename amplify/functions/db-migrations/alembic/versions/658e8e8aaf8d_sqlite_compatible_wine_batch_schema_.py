@@ -4,6 +4,8 @@ Revision ID: 658e8e8aaf8d
 Revises: a370e09fe716
 Create Date: 2025-06-24 00:15:15.652968
 
+This migration provides SQLite compatibility for local testing
+while maintaining full PostgreSQL support for production.
 """
 from alembic import op
 import sqlalchemy as sa
