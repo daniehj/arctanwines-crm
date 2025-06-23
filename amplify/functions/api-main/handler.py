@@ -592,11 +592,146 @@ async def create_wine_batch(request: Request):
 def run_migrations():
     """Run database migrations"""
     try:
-        # Try to create the wine_batches table manually as a fallback
         db = get_db_session()
         
-        # Check if table exists
-        table_exists = db.execute(text("""
+        tables_created = []
+        
+        # Check and create suppliers table
+        suppliers_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'suppliers'
+            );
+        """)).scalar()
+        
+        if not suppliers_exists:
+            print("Creating suppliers table...")
+            
+            db.execute(text("""
+                CREATE TABLE suppliers (
+                    id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    country VARCHAR(100) NOT NULL,
+                    contact_person VARCHAR(255),
+                    email VARCHAR(255),
+                    phone VARCHAR(50),
+                    payment_terms INTEGER DEFAULT 30,
+                    currency VARCHAR(3) DEFAULT 'EUR',
+                    tax_id VARCHAR(50),
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("suppliers")
+            print("suppliers table created successfully")
+        
+        # Check and create wines table
+        wines_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'wines'
+            );
+        """)).scalar()
+        
+        if not wines_exists:
+            print("Creating wines table...")
+            
+            db.execute(text("""
+                CREATE TABLE wines (
+                    id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    producer VARCHAR(255) NOT NULL,
+                    region VARCHAR(255),
+                    country VARCHAR(100) NOT NULL,
+                    vintage INTEGER,
+                    alcohol_content DECIMAL(4,2),
+                    bottle_size_ml INTEGER DEFAULT 750,
+                    product_category VARCHAR(50),
+                    tasting_notes TEXT,
+                    serving_temperature VARCHAR(50),
+                    food_pairing TEXT,
+                    organic BOOLEAN DEFAULT false,
+                    biodynamic BOOLEAN DEFAULT false,
+                    fiken_product_id INTEGER,
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("wines")
+            print("wines table created successfully")
+        
+        # Check and create wine_inventory table
+        wine_inventory_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'wine_inventory'
+            );
+        """)).scalar()
+        
+        if not wine_inventory_exists:
+            print("Creating wine_inventory table...")
+            
+            db.execute(text("""
+                CREATE TABLE wine_inventory (
+                    id VARCHAR(36) PRIMARY KEY,
+                    wine_id VARCHAR(36) REFERENCES wines(id),
+                    batch_id VARCHAR(36) REFERENCES wine_batches(id),
+                    quantity_available INTEGER NOT NULL DEFAULT 0,
+                    cost_per_bottle_ore INTEGER NOT NULL,
+                    selling_price_ore INTEGER NOT NULL,
+                    minimum_stock_level INTEGER DEFAULT 0,
+                    location VARCHAR(100),
+                    best_before_date VARCHAR(10),
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("wine_inventory")
+            print("wine_inventory table created successfully")
+        
+        # Check and create wine_batch_costs table
+        wine_batch_costs_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'wine_batch_costs'
+            );
+        """)).scalar()
+        
+        if not wine_batch_costs_exists:
+            print("Creating wine_batch_costs table...")
+            
+            db.execute(text("""
+                CREATE TABLE wine_batch_costs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    batch_id VARCHAR(36) REFERENCES wine_batches(id),
+                    cost_type VARCHAR(50) NOT NULL,
+                    amount_ore INTEGER NOT NULL,
+                    currency VARCHAR(3) NOT NULL,
+                    fiken_account_code VARCHAR(20),
+                    payment_date DATE,
+                    allocation_method VARCHAR(30) DEFAULT 'per_bottle',
+                    invoice_reference VARCHAR(100),
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("wine_batch_costs")
+            print("wine_batch_costs table created successfully")
+        
+        # Check and create wine_batches table (if it doesn't exist)
+        wine_batches_exists = db.execute(text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables 
                 WHERE table_schema = 'public' 
@@ -604,7 +739,7 @@ def run_migrations():
             );
         """)).scalar()
         
-        if not table_exists:
+        if not wine_batches_exists:
             print("Creating wine_batches table...")
             
             # Create the table manually (based on our migration)
@@ -614,10 +749,19 @@ def run_migrations():
                     batch_number VARCHAR(50) NOT NULL UNIQUE,
                     wine_name VARCHAR(200) NOT NULL,
                     producer VARCHAR(200) NOT NULL,
+                    import_date DATE,
+                    supplier_id VARCHAR(36) REFERENCES suppliers(id),
                     total_bottles INTEGER NOT NULL,
+                    eur_exchange_rate DECIMAL(10,6),
+                    wine_cost_eur_cents INTEGER,
+                    transport_cost_ore INTEGER DEFAULT 0,
+                    customs_fee_ore INTEGER DEFAULT 0,
+                    freight_forwarding_ore INTEGER DEFAULT 0,
                     status VARCHAR(20) NOT NULL DEFAULT 'ORDERED',
+                    fiken_sync_status VARCHAR(20) DEFAULT 'pending',
                     total_cost_nok_ore INTEGER NOT NULL DEFAULT 0,
                     target_price_nok_ore INTEGER,
+                    active BOOLEAN NOT NULL DEFAULT true,
                     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
                 );
@@ -630,22 +774,23 @@ def run_migrations():
                 CREATE INDEX ix_wine_batches_wine_name ON wine_batches(wine_name);
             """))
             
-            db.commit()
+            tables_created.append("wine_batches")
             print("wine_batches table created successfully")
-            
-            db.close()
-            
+        
+        db.commit()
+        db.close()
+        
+        if tables_created:
             return {
                 "status": "success",
-                "message": "Database migrations completed - wine_batches table created",
-                "table_created": True
+                "message": f"Database migrations completed - created tables: {', '.join(tables_created)}",
+                "tables_created": tables_created
             }
         else:
-            db.close()
             return {
                 "status": "success", 
-                "message": "Database is up to date - wine_batches table already exists",
-                "table_created": False
+                "message": "Database is up to date - all tables already exist",
+                "tables_created": []
             }
             
     except Exception as e:
