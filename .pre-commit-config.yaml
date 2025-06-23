@@ -1,0 +1,29 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-migration-requirements
+        name: Check Migration Test Requirements
+        entry: python scripts/check_migration_requirements.py
+        language: system
+        files: '^amplify/functions/db-migrations/models/.*\.py$|^amplify/functions/db-migrations/alembic/versions/.*\.py$'
+        pass_filenames: false
+        
+      - id: test-migrations-on-model-changes
+        name: Test Migrations on Model Changes
+        entry: python scripts/test_migrations_hook.py
+        language: system
+        files: '^amplify/functions/db-migrations/models/.*\.py$|^amplify/functions/db-migrations/alembic/versions/.*\.py$'
+        pass_filenames: true
+        
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        files: '^(scripts/|amplify/functions/.*\.py)$'
+        
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        files: '^(scripts/|amplify/functions/.*\.py)$'
+        args: [--max-line-length=88, --extend-ignore=E203] 
