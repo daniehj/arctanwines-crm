@@ -25,11 +25,12 @@ export default function DeveloperDashboard() {
 
   const endpoints = [
     { name: 'Health Check', path: '/health', method: 'GET' },
+    { name: 'Status', path: '/status', method: 'GET' },
     { name: 'Root Endpoint', path: '/', method: 'GET' },
     { name: 'Config Debug', path: '/config-debug', method: 'GET' },
     { name: 'VPC Info', path: '/vpc-info', method: 'GET' },
     { name: 'DNS Test', path: '/dns-test', method: 'GET' },
-    { name: 'Network Test', path: '/network-test', method: 'GET' },
+    { name: 'Network Test (AWS Only)', path: '/network-test', method: 'GET' },
     { name: 'Simple Network Test', path: '/network-simple-test', method: 'GET' },
     { name: 'API Test', path: '/api/v1/test', method: 'GET' },
     { name: 'Environment Debug', path: '/env-debug', method: 'GET' },

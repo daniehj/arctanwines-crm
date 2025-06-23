@@ -161,57 +161,43 @@ def dns_test():
 
 @app.get("/network-test")
 def network_test():
-    """Test network connectivity to various endpoints"""
-    import urllib.request
-    import urllib.error
+    """Test network connectivity to AWS services (avoiding external timeouts)"""
+    import socket
     
-    test_urls = [
-        "https://httpbin.org/ip",
-        "https://www.google.com",
-        "https://amazonaws.com",
-        "https://ssm.eu-west-1.amazonaws.com",
-        "https://secretsmanager.eu-west-1.amazonaws.com"
+    # Test AWS services only (these should be reachable via VPC endpoints)
+    test_hosts = [
+        ("ssm.eu-west-1.amazonaws.com", 443),
+        ("secretsmanager.eu-west-1.amazonaws.com", 443),
+        ("lambda.eu-west-1.amazonaws.com", 443),
+        ("dynamodb.eu-west-1.amazonaws.com", 443)
     ]
     
     results = {}
     
-    for url in test_urls:
+    for host, port in test_hosts:
         try:
             start_time = time.time()
-            req = urllib.request.Request(url)
-            req.add_header('User-Agent', 'lambda-network-test')
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)  # Short timeout to avoid API Gateway timeout
+            result = sock.connect_ex((host, port))
+            duration = time.time() - start_time
+            sock.close()
             
-            with urllib.request.urlopen(req, timeout=10) as response:
-                status_code = response.getcode()
-                content_length = len(response.read())
-                duration = time.time() - start_time
-                
-                results[url] = {
-                    "status": "success",
-                    "status_code": status_code,
-                    "content_length": content_length,
-                    "duration_ms": round(duration * 1000, 2)
-                }
-        except urllib.error.HTTPError as e:
-            results[url] = {
-                "status": "http_error",
-                "status_code": e.code,
-                "error": str(e)
-            }
-        except urllib.error.URLError as e:
-            results[url] = {
-                "status": "url_error",
-                "error": str(e)
+            results[f"{host}:{port}"] = {
+                "status": "success" if result == 0 else "failed",
+                "result_code": result,
+                "duration_ms": round(duration * 1000, 2)
             }
         except Exception as e:
-            results[url] = {
-                "status": "error",
+            results[f"{host}:{port}"] = {
+                "status": "error", 
                 "error": str(e)
             }
     
     return {
         "status": "success",
         "network_tests": results,
+        "note": "Testing AWS service connectivity only (external URLs skipped to avoid VPC timeouts)",
         "timestamp": time.time()
     }
 
@@ -323,6 +309,18 @@ def env_debug():
         "safe_environment_variables": env_vars,
         "total_env_var_count": total_env_vars,
         "timestamp": time.time()
+    }
+
+@app.get("/status")
+def status():
+    """Simple status endpoint with no external dependencies"""
+    return {
+        "status": "online",
+        "service": "arctanwines-crm-api",
+        "timestamp": time.time(),
+        "environment": get_environment(),
+        "lambda_function": os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown'),
+        "aws_region": os.environ.get('AWS_REGION', 'unknown')
     }
 
 # AWS Lambda handler
