@@ -8,7 +8,17 @@ from mangum import Mangum
 import boto3
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from pydantic import BaseModel
 from database import db_service, WineBatch, WineBatchStatus
+
+# Pydantic models for API
+class WineBatchCreate(BaseModel):
+    batch_number: str
+    wine_name: str
+    producer: str
+    total_bottles: int
+    total_cost_nok_ore: int = 0
+    target_price_nok_ore: int = None
 
 # Initialize FastAPI app
 app = FastAPI(title="Arctan Wines CRM API")
@@ -816,30 +826,22 @@ def list_wine_batches(db = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to fetch wine batches: {str(e)}")
 
 @app.post("/db/wine-batches")
-def create_wine_batch(
-    batch_number: str,
-    wine_name: str,
-    producer: str,
-    total_bottles: int,
-    total_cost_nok_ore: int = 0,
-    target_price_nok_ore: int = None,
-    db = Depends(get_db)
-):
+def create_wine_batch(wine_batch: WineBatchCreate, db = Depends(get_db)):
     """Create a new wine batch"""
     try:
         # Check if batch number already exists
-        existing = db.query(WineBatch).filter(WineBatch.batch_number == batch_number).first()
+        existing = db.query(WineBatch).filter(WineBatch.batch_number == wine_batch.batch_number).first()
         if existing:
-            raise HTTPException(status_code=400, detail=f"Batch number {batch_number} already exists")
+            raise HTTPException(status_code=400, detail=f"Batch number {wine_batch.batch_number} already exists")
         
         # Create new batch
         new_batch = WineBatch(
-            batch_number=batch_number,
-            wine_name=wine_name,
-            producer=producer,
-            total_bottles=total_bottles,
-            total_cost_nok_ore=total_cost_nok_ore,
-            target_price_nok_ore=target_price_nok_ore,
+            batch_number=wine_batch.batch_number,
+            wine_name=wine_batch.wine_name,
+            producer=wine_batch.producer,
+            total_bottles=wine_batch.total_bottles,
+            total_cost_nok_ore=wine_batch.total_cost_nok_ore,
+            target_price_nok_ore=wine_batch.target_price_nok_ore,
             status=WineBatchStatus.ORDERED
         )
         
