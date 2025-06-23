@@ -39,6 +39,14 @@ export default function DatabaseDashboard() {
     { name: 'Low Stock Alerts (Phase 3)', path: '/db/inventory/low-stock', method: 'GET' },
   ];
 
+  const alembicEndpoints = [
+    { name: '📋 Current Alembic Revision', path: '/db/alembic/current', method: 'GET' },
+    { name: '📚 Migration History', path: '/db/alembic/history', method: 'GET' },
+    { name: '🧪 Test Migration Locally (SQLite)', path: '/db/alembic/test-local', method: 'POST' },
+    { name: '🚀 Run Migration (Test First)', path: '/db/migrate', method: 'POST' },
+    { name: '⚠️ Legacy Manual Migration', path: '/db/migrate-legacy', method: 'POST' },
+  ];
+
   const expectedSchema = [
     {
       table: 'wine_batches',

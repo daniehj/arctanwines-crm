@@ -5,6 +5,8 @@ from .base import Base, BaseModel
 from .supplier import Supplier
 from .wine import Wine, WineInventory
 from .batch import WineBatch, WineBatchCost, WineBatchStatus
+from .customer import Customer
+from .order import Order, OrderItem, OrderStatus, PaymentStatus
 
 # Export all models for Alembic to discover
 __all__ = [
@@ -15,5 +17,10 @@ __all__ = [
     'WineInventory',
     'WineBatch',
     'WineBatchCost',
-    'WineBatchStatus'
+    'WineBatchStatus',
+    'Customer',
+    'Order',
+    'OrderItem',
+    'OrderStatus',
+    'PaymentStatus'
 ] 

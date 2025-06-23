@@ -1,16 +1,17 @@
 """
-Arctan Wines CRM Models Package
+SQLAlchemy models for Arctan Wines CRM
 """
 from .base import Base, BaseModel, GUID
 from .supplier import Supplier
 from .wine import Wine, WineInventory
-from .batch import WineBatch, WineBatchCost, WineBatchStatus
+from .wine_batch import WineBatch, WineBatchCost, WineBatchStatus
 from .customer import Customer
 from .order import Order, OrderItem, OrderStatus, PaymentStatus
 
+# Export all models for Alembic to discover
 __all__ = [
     'Base',
-    'BaseModel', 
+    'BaseModel',
     'GUID',
     'Supplier',
     'Wine',

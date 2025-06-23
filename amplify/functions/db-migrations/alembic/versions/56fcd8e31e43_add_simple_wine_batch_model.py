@@ -8,6 +8,13 @@ Create Date: 2025-06-23 13:18:36.522652
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy import Text
+import sys
+from pathlib import Path
+
+# Add models path for imports
+sys.path.append(str(Path(__file__).parent.parent.parent / "models"))
+from base import GUID
 
 # revision identifiers, used by Alembic.
 revision = '56fcd8e31e43'
@@ -27,7 +34,7 @@ def upgrade() -> None:
     sa.Column('payment_terms', sa.Integer(), nullable=True, comment='Payment terms in days'),
     sa.Column('currency', sa.String(length=3), nullable=True, comment='Primary currency (EUR, NOK, USD)'),
     sa.Column('tax_id', sa.String(length=50), nullable=True, comment='VAT number or tax identification'),
-    sa.Column('id', models.base.GUID(), nullable=False, comment='Primary key using UUID'),
+    sa.Column('id', GUID(), nullable=False, comment='Primary key using UUID'),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, comment='Timestamp when record was created'),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, comment='Timestamp when record was last updated'),
     sa.Column('active', sa.Boolean(), nullable=False, comment='Soft delete flag'),
@@ -39,7 +46,7 @@ def upgrade() -> None:
     sa.Column('region', sa.String(length=255), nullable=True, comment='Wine region'),
     sa.Column('country', sa.String(length=100), nullable=False, comment='Country of origin'),
     sa.Column('vintage', sa.Integer(), nullable=True, comment='Wine vintage year'),
-    sa.Column('grape_varieties', postgresql.JSONB(astext_type=Text()), nullable=True, comment='Array of grape varieties'),
+    sa.Column('grape_varieties', sa.Text(), nullable=True, comment='JSON string of grape varieties'),
     sa.Column('alcohol_content', sa.DECIMAL(precision=4, scale=2), nullable=True, comment='Alcohol percentage (e.g., 13.5)'),
     sa.Column('bottle_size_ml', sa.Integer(), nullable=True, comment='Bottle size in milliliters'),
     sa.Column('product_category', sa.String(length=50), nullable=True, comment='Wine category (red, white, rosé, sparkling, dessert)'),
@@ -49,14 +56,14 @@ def upgrade() -> None:
     sa.Column('organic', sa.Boolean(), nullable=True, comment='Organic certification'),
     sa.Column('biodynamic', sa.Boolean(), nullable=True, comment='Biodynamic certification'),
     sa.Column('fiken_product_id', sa.Integer(), nullable=True, comment='Fiken product ID for sync'),
-    sa.Column('id', models.base.GUID(), nullable=False, comment='Primary key using UUID'),
+    sa.Column('id', GUID(), nullable=False, comment='Primary key using UUID'),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, comment='Timestamp when record was created'),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, comment='Timestamp when record was last updated'),
     sa.Column('active', sa.Boolean(), nullable=False, comment='Soft delete flag'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('wine_batch_costs',
-    sa.Column('batch_id', models.base.GUID(), nullable=False, comment='Reference to wine batch'),
+    sa.Column('batch_id', GUID(), nullable=False, comment='Reference to wine batch'),
     sa.Column('cost_type', sa.String(length=50), nullable=False, comment='Type of cost (transport, customs, freight, wine_purchase)'),
     sa.Column('amount_ore', sa.Integer(), nullable=False, comment='Cost amount in øre (or cents for EUR)'),
     sa.Column('currency', sa.String(length=3), nullable=False, comment='Currency (NOK, EUR)'),
@@ -64,7 +71,7 @@ def upgrade() -> None:
     sa.Column('payment_date', sa.Date(), nullable=True, comment='Date payment was made'),
     sa.Column('allocation_method', sa.String(length=30), nullable=True, comment='How cost is allocated (per_bottle, by_value, percentage)'),
     sa.Column('invoice_reference', sa.String(length=100), nullable=True, comment='Invoice or reference number'),
-    sa.Column('id', models.base.GUID(), nullable=False, comment='Primary key using UUID'),
+    sa.Column('id', GUID(), nullable=False, comment='Primary key using UUID'),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, comment='Timestamp when record was created'),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, comment='Timestamp when record was last updated'),
     sa.Column('active', sa.Boolean(), nullable=False, comment='Soft delete flag'),
@@ -72,15 +79,15 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('wine_inventory',
-    sa.Column('wine_id', models.base.GUID(), nullable=False, comment='Reference to wine'),
-    sa.Column('batch_id', models.base.GUID(), nullable=True, comment='Reference to import batch'),
+    sa.Column('wine_id', GUID(), nullable=False, comment='Reference to wine'),
+    sa.Column('batch_id', GUID(), nullable=True, comment='Reference to import batch'),
     sa.Column('quantity_available', sa.Integer(), nullable=False, comment='Current stock quantity'),
     sa.Column('cost_per_bottle_ore', sa.Integer(), nullable=False, comment='Cost per bottle in NOK øre'),
     sa.Column('selling_price_ore', sa.Integer(), nullable=False, comment='Selling price in NOK øre'),
     sa.Column('minimum_stock_level', sa.Integer(), nullable=True, comment='Minimum stock alert level'),
     sa.Column('location', sa.String(length=100), nullable=True, comment='Storage location'),
     sa.Column('best_before_date', sa.String(length=10), nullable=True, comment='Best before date (YYYY-MM-DD)'),
-    sa.Column('id', models.base.GUID(), nullable=False, comment='Primary key using UUID'),
+    sa.Column('id', GUID(), nullable=False, comment='Primary key using UUID'),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, comment='Timestamp when record was created'),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, comment='Timestamp when record was last updated'),
     sa.Column('active', sa.Boolean(), nullable=False, comment='Soft delete flag'),
@@ -89,7 +96,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.add_column('wine_batches', sa.Column('import_date', sa.Date(), nullable=False, comment='Date of import'))
-    op.add_column('wine_batches', sa.Column('supplier_id', models.base.GUID(), nullable=True, comment='Reference to supplier'))
+    op.add_column('wine_batches', sa.Column('supplier_id', GUID(), nullable=True, comment='Reference to supplier'))
     op.add_column('wine_batches', sa.Column('eur_exchange_rate', sa.DECIMAL(precision=10, scale=6), nullable=False, comment='EUR to NOK exchange rate at import'))
     op.add_column('wine_batches', sa.Column('wine_cost_eur_cents', sa.Integer(), nullable=False, comment='Wine cost in EUR cents'))
     op.add_column('wine_batches', sa.Column('transport_cost_ore', sa.Integer(), nullable=True, comment='Transport cost in NOK øre'))

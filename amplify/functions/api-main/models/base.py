@@ -1,5 +1,5 @@
 """
-Base SQLAlchemy models for Arctan Wines CRM - API Main Function
+Base SQLAlchemy models for Arctan Wines CRM
 """
 import uuid
 from datetime import datetime, timezone
