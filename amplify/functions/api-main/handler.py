@@ -676,7 +676,7 @@ def run_migrations():
         """)).scalar()
         
         if not wine_inventory_exists:
-            print("Creating wine_inventory table...")
+            print("Creating wine_inventory table with Phase 3 columns...")
             
             db.execute(text("""
                 CREATE TABLE wine_inventory (
@@ -684,11 +684,16 @@ def run_migrations():
                     wine_id VARCHAR(36) REFERENCES wines(id),
                     batch_id VARCHAR(36) REFERENCES wine_batches(id),
                     quantity_available INTEGER NOT NULL DEFAULT 0,
+                    quantity_reserved INTEGER DEFAULT 0,
+                    quantity_sold INTEGER DEFAULT 0,
                     cost_per_bottle_ore INTEGER NOT NULL,
                     selling_price_ore INTEGER NOT NULL,
+                    markup_percentage INTEGER DEFAULT 0,
+                    margin_per_bottle_ore INTEGER DEFAULT 0,
                     minimum_stock_level INTEGER DEFAULT 0,
                     location VARCHAR(100),
-                    best_before_date VARCHAR(10),
+                    best_before_date TIMESTAMP WITH TIME ZONE,
+                    low_stock_alert BOOLEAN DEFAULT false,
                     active BOOLEAN NOT NULL DEFAULT true,
                     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -832,6 +837,173 @@ def run_migrations():
                     print("Added foreign key constraint for supplier_id")
             except Exception as e:
                 print(f"Foreign key constraint may already exist or suppliers table not ready: {e}")
+        
+        # Update wine_inventory table with Phase 3 columns
+        wine_inventory_table_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'wine_inventory'
+            );
+        """)).scalar()
+        
+        if wine_inventory_table_exists:
+            print("Updating wine_inventory table with Phase 3 columns...")
+            
+            # Add Phase 3 columns to wine_inventory
+            phase3_inventory_columns = {
+                'quantity_reserved': 'INTEGER DEFAULT 0',
+                'quantity_sold': 'INTEGER DEFAULT 0',
+                'markup_percentage': 'INTEGER DEFAULT 0',
+                'margin_per_bottle_ore': 'INTEGER DEFAULT 0',
+                'low_stock_alert': 'BOOLEAN DEFAULT false'
+            }
+            
+            inventory_missing_columns = []
+            for col, col_def in phase3_inventory_columns.items():
+                if not db.execute(text(f"""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_name = 'wine_inventory' 
+                        AND column_name = '{col}'
+                    );
+                """)).scalar():
+                    print(f"Adding column {col} to wine_inventory...")
+                    db.execute(text(f"ALTER TABLE wine_inventory ADD COLUMN {col} {col_def};"))
+                    inventory_missing_columns.append(col)
+            
+            if inventory_missing_columns:
+                tables_created.append(f"wine_inventory (added Phase 3 columns: {', '.join(inventory_missing_columns)})")
+        
+        # Create customers table
+        customers_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'customers'
+            );
+        """)).scalar()
+        
+        if not customers_exists:
+            print("Creating customers table...")
+            
+            db.execute(text("""
+                CREATE TABLE customers (
+                    id VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    customer_type VARCHAR(50) NOT NULL,
+                    email VARCHAR(255),
+                    phone VARCHAR(50),
+                    address_line1 VARCHAR(255),
+                    address_line2 VARCHAR(255),
+                    postal_code VARCHAR(20),
+                    city VARCHAR(100),
+                    country VARCHAR(100) DEFAULT 'Norway',
+                    organization_number VARCHAR(50),
+                    vat_number VARCHAR(50),
+                    preferred_delivery_method VARCHAR(50),
+                    payment_terms INTEGER DEFAULT 0,
+                    credit_limit_nok_ore INTEGER DEFAULT 0,
+                    marketing_consent BOOLEAN DEFAULT false,
+                    newsletter_subscription BOOLEAN DEFAULT false,
+                    preferred_language VARCHAR(10) DEFAULT 'no',
+                    notes TEXT,
+                    fiken_customer_id VARCHAR(100),
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("customers")
+            print("customers table created successfully")
+        
+        # Create orders table
+        orders_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'orders'
+            );
+        """)).scalar()
+        
+        if not orders_exists:
+            print("Creating orders table...")
+            
+            db.execute(text("""
+                CREATE TABLE orders (
+                    id VARCHAR(36) PRIMARY KEY,
+                    order_number VARCHAR(50) UNIQUE NOT NULL,
+                    customer_id VARCHAR(36) REFERENCES customers(id) NOT NULL,
+                    status VARCHAR(30) DEFAULT 'draft',
+                    payment_status VARCHAR(30) DEFAULT 'pending',
+                    order_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    requested_delivery_date TIMESTAMP WITH TIME ZONE,
+                    confirmed_delivery_date TIMESTAMP WITH TIME ZONE,
+                    delivered_date TIMESTAMP WITH TIME ZONE,
+                    delivery_method VARCHAR(50) NOT NULL,
+                    delivery_address_line1 VARCHAR(255),
+                    delivery_address_line2 VARCHAR(255),
+                    delivery_postal_code VARCHAR(20),
+                    delivery_city VARCHAR(100),
+                    delivery_country VARCHAR(100),
+                    delivery_notes TEXT,
+                    subtotal_ore INTEGER DEFAULT 0 NOT NULL,
+                    delivery_fee_ore INTEGER DEFAULT 0 NOT NULL,
+                    discount_ore INTEGER DEFAULT 0 NOT NULL,
+                    vat_ore INTEGER DEFAULT 0 NOT NULL,
+                    total_ore INTEGER DEFAULT 0 NOT NULL,
+                    payment_terms INTEGER DEFAULT 0,
+                    payment_due_date TIMESTAMP WITH TIME ZONE,
+                    customer_notes TEXT,
+                    internal_notes TEXT,
+                    fiken_order_id VARCHAR(100),
+                    fiken_invoice_number VARCHAR(50),
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("orders")
+            print("orders table created successfully")
+        
+        # Create order_items table
+        order_items_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'order_items'
+            );
+        """)).scalar()
+        
+        if not order_items_exists:
+            print("Creating order_items table...")
+            
+            db.execute(text("""
+                CREATE TABLE order_items (
+                    id VARCHAR(36) PRIMARY KEY,
+                    order_id VARCHAR(36) REFERENCES orders(id) NOT NULL,
+                    wine_batch_id VARCHAR(36) REFERENCES wine_batches(id),
+                    wine_id VARCHAR(36) REFERENCES wines(id),
+                    quantity INTEGER NOT NULL,
+                    unit_price_ore INTEGER NOT NULL,
+                    total_price_ore INTEGER NOT NULL,
+                    wine_name VARCHAR(255) NOT NULL,
+                    producer VARCHAR(255),
+                    vintage INTEGER,
+                    bottle_size_ml INTEGER DEFAULT 750,
+                    discount_percentage INTEGER DEFAULT 0,
+                    discount_ore INTEGER DEFAULT 0,
+                    notes TEXT,
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("order_items")
+            print("order_items table created successfully")
         
         db.commit()
         db.close()

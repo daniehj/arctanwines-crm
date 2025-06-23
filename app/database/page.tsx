@@ -141,9 +141,37 @@ export default function DatabaseDashboard() {
     for (const schema of expectedSchema) {
       try {
         // Try to query each table to see if it exists
+        let endpoint = '';
+        switch (schema.table) {
+          case 'wine_batches':
+            endpoint = '/db/wine-batches';
+            break;
+          case 'suppliers':
+            endpoint = '/db/suppliers';
+            break;
+          case 'wines':
+            endpoint = '/db/wines';
+            break;
+          case 'customers':
+            endpoint = '/db/customers';
+            break;
+          case 'orders':
+            endpoint = '/db/orders';
+            break;
+          case 'wine_inventory':
+            endpoint = '/db/inventory';
+            break;
+          case 'order_items':
+          case 'wine_batch_costs':
+            // These tables don't have direct endpoints, so we assume they exist if the migration ran
+            throw new Error('No direct endpoint - will be created by migration');
+          default:
+            endpoint = `/db/${schema.table.replace('_', '-')}`;
+        }
+
         const response = await get({
           apiName: 'arctanwines-crm-api',
-          path: `/db/${schema.table.replace('_', '-')}`,
+          path: endpoint,
           options: {
             headers: {
               'Content-Type': 'application/json',
@@ -244,7 +272,7 @@ export default function DatabaseDashboard() {
     }
   };
 
-  const pendingMigrations = migrationStatus.filter(s => s.status === 'missing').length;
+  const pendingMigrations = migrationStatus.filter(s => s.status === 'missing' || s.status === 'partial').length;
   const completedMigrations = migrationStatus.filter(s => s.status === 'complete').length;
 
   return (
@@ -312,7 +340,7 @@ export default function DatabaseDashboard() {
                   </div>
                   <div className="ml-3">
                     <p className="text-sm font-medium text-gray-500">Pending Migrations</p>
-                    <p className="text-lg font-semibold text-gray-900">{pendingMigrations} tables missing</p>
+                    <p className="text-lg font-semibold text-gray-900">{pendingMigrations} tables need migration</p>
                   </div>
                 </div>
               </div>
