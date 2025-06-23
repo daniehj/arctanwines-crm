@@ -11,6 +11,9 @@ from sqlalchemy.orm import sessionmaker
 import uuid
 import subprocess
 from pathlib import Path
+import pg8000
+from datetime import datetime, date
+from decimal import Decimal
 
 # Initialize FastAPI app
 app = FastAPI(title="Arctan Wines CRM API")
@@ -146,6 +149,16 @@ def get_db_session():
     if SessionLocal is None:
         init_database()
     return SessionLocal()
+
+def get_database_config():
+    """Get database configuration for raw connections"""
+    return {
+        'host': get_ssm_parameter("database/host"),
+        'port': get_ssm_parameter("database/port") or "5432",
+        'name': get_ssm_parameter("database/name"),
+        'username': get_ssm_parameter("database/username"),
+        'password': get_ssm_parameter("database/password")
+    }
 
 @app.get("/")
 def root():
@@ -444,44 +457,60 @@ def test_database():
         raise HTTPException(status_code=500, detail=f"Database test failed: {str(e)}")
 
 @app.get("/db/wine-batches")
-def list_wine_batches():
+async def list_wine_batches():
     """List all wine batches"""
     try:
-        db = get_db_session()
+        # Use same connection logic as before
+        db_config = get_database_config()
         
-        # Simple raw SQL query to avoid complex ORM setup
-        result = db.execute(text("""
-            SELECT id, batch_number, wine_name, producer, total_bottles, 
-                   status, total_cost_nok_ore, target_price_nok_ore, 
-                   created_at, updated_at
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        # Query with enhanced fields
+        cursor.execute("""
+            SELECT id, batch_number, status, wine_name, producer, total_bottles, 
+                   import_date, eur_exchange_rate, wine_cost_eur_cents,
+                   transport_cost_ore, customs_fee_ore, freight_forwarding_ore,
+                   supplier_id, fiken_sync_status, created_at, updated_at
             FROM wine_batches 
             ORDER BY created_at DESC
-        """))
+        """)
+        
+        columns = ['id', 'batch_number', 'status', 'wine_name', 'producer', 'total_bottles',
+                  'import_date', 'eur_exchange_rate', 'wine_cost_eur_cents', 
+                  'transport_cost_ore', 'customs_fee_ore', 'freight_forwarding_ore',
+                  'supplier_id', 'fiken_sync_status', 'created_at', 'updated_at']
         
         batches = []
-        for row in result:
-            batches.append({
-                "id": str(row.id),
-                "batch_number": row.batch_number,
-                "wine_name": row.wine_name,
-                "producer": row.producer,
-                "total_bottles": row.total_bottles,
-                "status": row.status,
-                "total_cost_nok_ore": row.total_cost_nok_ore,
-                "target_price_nok_ore": row.target_price_nok_ore,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-                "updated_at": row.updated_at.isoformat() if row.updated_at else None
-            })
+        for row in cursor.fetchall():
+            batch = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, date):
+                    batch[col] = value.isoformat()
+                elif isinstance(value, datetime):
+                    batch[col] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    batch[col] = float(value)
+                else:
+                    batch[col] = value
+            batches.append(batch)
         
-        db.close()
+        cursor.close()
+        conn.close()
         
-        return {
-            "status": "success",
-            "count": len(batches),
-            "batches": batches
-        }
+        return {"wine_batches": batches}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch wine batches: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.post("/db/wine-batches")
 async def create_wine_batch(request: Request):
@@ -622,6 +651,230 @@ def run_migrations():
     except Exception as e:
         print(f"Migration failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+# Suppliers endpoints
+@app.get("/db/suppliers")
+async def list_suppliers():
+    """List all suppliers"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, name, country, contact_person, email, phone, 
+                   payment_terms, currency, tax_id, active, created_at, updated_at
+            FROM suppliers 
+            WHERE active = true
+            ORDER BY name
+        """)
+        
+        columns = ['id', 'name', 'country', 'contact_person', 'email', 'phone',
+                  'payment_terms', 'currency', 'tax_id', 'active', 'created_at', 'updated_at']
+        
+        suppliers = []
+        for row in cursor.fetchall():
+            supplier = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, datetime):
+                    supplier[col] = value.isoformat()
+                else:
+                    supplier[col] = value
+            suppliers.append(supplier)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"suppliers": suppliers}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/db/suppliers")
+async def create_supplier(request: Request):
+    """Create a new supplier"""
+    try:
+        data = await request.json()
+        
+        # Validate required fields
+        required_fields = ['name', 'country']
+        for field in required_fields:
+            if field not in data:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        # Generate UUID for supplier
+        supplier_id = str(uuid.uuid4())
+        
+        cursor.execute("""
+            INSERT INTO suppliers (
+                id, name, country, contact_person, email, phone,
+                payment_terms, currency, tax_id, active, created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            supplier_id,
+            data['name'],
+            data['country'],
+            data.get('contact_person'),
+            data.get('email'),
+            data.get('phone'),
+            data.get('payment_terms', 30),
+            data.get('currency', 'EUR'),
+            data.get('tax_id'),
+            True,
+            datetime.now(),
+            datetime.now()
+        ))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {
+            "message": "Supplier created successfully",
+            "supplier_id": supplier_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+# Wines endpoints
+@app.get("/db/wines")
+async def list_wines():
+    """List all wines"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, name, producer, region, country, vintage, 
+                   alcohol_content, bottle_size_ml, product_category,
+                   tasting_notes, organic, biodynamic, active, created_at, updated_at
+            FROM wines 
+            WHERE active = true
+            ORDER BY name, vintage DESC
+        """)
+        
+        columns = ['id', 'name', 'producer', 'region', 'country', 'vintage',
+                  'alcohol_content', 'bottle_size_ml', 'product_category',
+                  'tasting_notes', 'organic', 'biodynamic', 'active', 'created_at', 'updated_at']
+        
+        wines = []
+        for row in cursor.fetchall():
+            wine = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, datetime):
+                    wine[col] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    wine[col] = float(value)
+                else:
+                    wine[col] = value
+            wines.append(wine)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"wines": wines}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.post("/db/wines")
+async def create_wine(request: Request):
+    """Create a new wine"""
+    try:
+        data = await request.json()
+        
+        # Validate required fields
+        required_fields = ['name', 'producer', 'country']
+        for field in required_fields:
+            if field not in data:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        # Generate UUID for wine
+        wine_id = str(uuid.uuid4())
+        
+        cursor.execute("""
+            INSERT INTO wines (
+                id, name, producer, region, country, vintage, 
+                alcohol_content, bottle_size_ml, product_category,
+                tasting_notes, organic, biodynamic, active, created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            wine_id,
+            data['name'],
+            data['producer'],
+            data.get('region'),
+            data['country'],
+            data.get('vintage'),
+            data.get('alcohol_content'),
+            data.get('bottle_size_ml', 750),
+            data.get('product_category'),
+            data.get('tasting_notes'),
+            data.get('organic', False),
+            data.get('biodynamic', False),
+            True,
+            datetime.now(),
+            datetime.now()
+        ))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {
+            "message": "Wine created successfully",
+            "wine_id": wine_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # AWS Lambda handler
 handler = Mangum(app) 

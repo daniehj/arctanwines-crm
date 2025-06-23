@@ -24,6 +24,31 @@ interface WineBatchForm {
   target_price_nok_ore: number;
 }
 
+interface SupplierForm {
+  name: string;
+  country: string;
+  contact_person: string;
+  email: string;
+  phone: string;
+  payment_terms: number;
+  currency: string;
+  tax_id: string;
+}
+
+interface WineForm {
+  name: string;
+  producer: string;
+  region: string;
+  country: string;
+  vintage: number;
+  alcohol_content: number;
+  bottle_size_ml: number;
+  product_category: string;
+  tasting_notes: string;
+  organic: boolean;
+  biodynamic: boolean;
+}
+
 export default function DeveloperDashboard() {
   const [user, setUser] = useState<any>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
@@ -37,6 +62,31 @@ export default function DeveloperDashboard() {
     total_cost_nok_ore: 0,
     target_price_nok_ore: 0
   });
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [supplierForm, setSupplierForm] = useState<SupplierForm>({
+    name: '',
+    country: '',
+    contact_person: '',
+    email: '',
+    phone: '',
+    payment_terms: 30,
+    currency: 'EUR',
+    tax_id: ''
+  });
+  const [showWineForm, setShowWineForm] = useState(false);
+  const [wineForm, setWineForm] = useState<WineForm>({
+    name: '',
+    producer: '',
+    region: '',
+    country: '',
+    vintage: 0,
+    alcohol_content: 0,
+    bottle_size_ml: 750,
+    product_category: '',
+    tasting_notes: '',
+    organic: false,
+    biodynamic: false
+  });
 
   const endpoints = [
     { name: 'Health Check', path: '/health', method: 'GET' },
@@ -44,6 +94,8 @@ export default function DeveloperDashboard() {
     { name: 'Database Test', path: '/db/test', method: 'GET' },
     { name: 'Run Migrations', path: '/db/migrate', method: 'POST' },
     { name: 'List Wine Batches', path: '/db/wine-batches', method: 'GET' },
+    { name: 'List Suppliers', path: '/db/suppliers', method: 'GET' },
+    { name: 'List Wines', path: '/db/wines', method: 'GET' },
     { name: 'Root Endpoint', path: '/', method: 'GET' },
     { name: 'Config Debug', path: '/config-debug', method: 'GET' },
     { name: 'VPC Info', path: '/vpc-info', method: 'GET' },
@@ -230,6 +282,93 @@ export default function DeveloperDashboard() {
     }
   };
 
+  // Create supplier
+  const createSupplier = async () => {
+    try {
+      console.log('Creating supplier:', supplierForm);
+      
+      const response = await post({
+        apiName: 'arctanwines-crm-api',
+        path: '/db/suppliers',
+        options: {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(supplierForm)
+        },
+      }).response;
+
+      const body = await response.body.json();
+      console.log('Supplier created:', body);
+      
+      // Reset form and hide it
+      setSupplierForm({
+        name: '',
+        country: '',
+        contact_person: '',
+        email: '',
+        phone: '',
+        payment_terms: 30,
+        currency: 'EUR',
+        tax_id: ''
+      });
+      setShowSupplierForm(false);
+      
+      // Refresh suppliers list
+      await runTest({ name: 'List Suppliers', path: '/db/suppliers', method: 'GET' });
+      
+      alert('Supplier created successfully!');
+    } catch (error: any) {
+      console.error('Create supplier error:', error);
+      alert(`Failed to create supplier: ${error.message || error}`);
+    }
+  };
+
+  // Create wine
+  const createWine = async () => {
+    try {
+      console.log('Creating wine:', wineForm);
+      
+      const response = await post({
+        apiName: 'arctanwines-crm-api',
+        path: '/db/wines',
+        options: {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(wineForm)
+        },
+      }).response;
+
+      const body = await response.body.json();
+      console.log('Wine created:', body);
+      
+      // Reset form and hide it
+      setWineForm({
+        name: '',
+        producer: '',
+        region: '',
+        country: '',
+        vintage: 0,
+        alcohol_content: 0,
+        bottle_size_ml: 750,
+        product_category: '',
+        tasting_notes: '',
+        organic: false,
+        biodynamic: false
+      });
+      setShowWineForm(false);
+      
+      // Refresh wines list
+      await runTest({ name: 'List Wines', path: '/db/wines', method: 'GET' });
+      
+      alert('Wine created successfully!');
+    } catch (error: any) {
+      console.error('Create wine error:', error);
+      alert(`Failed to create wine: ${error.message || error}`);
+    }
+  };
+
   return (
     <Authenticator>
       {({ signOut, user }) => (
@@ -300,6 +439,18 @@ export default function DeveloperDashboard() {
                     className="px-6 py-2 rounded-md bg-green-600 text-white hover:bg-green-700"
                   >
                     {showBatchForm ? 'Hide' : 'Add'} Wine Batch
+                  </button>
+                  <button
+                    onClick={() => setShowSupplierForm(!showSupplierForm)}
+                    className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    {showSupplierForm ? 'Hide' : 'Add'} Supplier
+                  </button>
+                  <button
+                    onClick={() => setShowWineForm(!showWineForm)}
+                    className="px-6 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700"
+                  >
+                    {showWineForm ? 'Hide' : 'Add'} Wine
                   </button>
                 </div>
               </div>
@@ -400,6 +551,304 @@ export default function DeveloperDashboard() {
                     </button>
                     <button
                       onClick={() => setShowBatchForm(false)}
+                      className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Supplier Form */}
+            {showSupplierForm && (
+              <div className="bg-white shadow rounded-lg mb-6">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-medium text-gray-900">Create Supplier</h2>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Supplier Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={supplierForm.name}
+                        onChange={(e) => setSupplierForm({...supplierForm, name: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Bodega Acediano"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Country *
+                      </label>
+                      <input
+                        type="text"
+                        value={supplierForm.country}
+                        onChange={(e) => setSupplierForm({...supplierForm, country: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Spain"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Contact Person
+                      </label>
+                      <input
+                        type="text"
+                        value={supplierForm.contact_person}
+                        onChange={(e) => setSupplierForm({...supplierForm, contact_person: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Juan Rodriguez"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={supplierForm.email}
+                        onChange={(e) => setSupplierForm({...supplierForm, email: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., juan@bodegaacediano.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone
+                      </label>
+                      <input
+                        type="text"
+                        value={supplierForm.phone}
+                        onChange={(e) => setSupplierForm({...supplierForm, phone: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., +34 123 456 789"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Payment Terms (days)
+                      </label>
+                      <input
+                        type="number"
+                        value={supplierForm.payment_terms}
+                        onChange={(e) => setSupplierForm({...supplierForm, payment_terms: parseInt(e.target.value) || 30})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Currency
+                      </label>
+                      <select
+                        value={supplierForm.currency}
+                        onChange={(e) => setSupplierForm({...supplierForm, currency: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="EUR">EUR</option>
+                        <option value="NOK">NOK</option>
+                        <option value="USD">USD</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tax ID / VAT Number
+                      </label>
+                      <input
+                        type="text"
+                        value={supplierForm.tax_id}
+                        onChange={(e) => setSupplierForm({...supplierForm, tax_id: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., ES12345678Z"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex space-x-3">
+                    <button
+                      onClick={createSupplier}
+                      disabled={!supplierForm.name || !supplierForm.country}
+                      className={`px-4 py-2 rounded-md text-white font-medium ${
+                        !supplierForm.name || !supplierForm.country
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      }`}
+                    >
+                      Create Supplier
+                    </button>
+                    <button
+                      onClick={() => setShowSupplierForm(false)}
+                      className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Wine Form */}
+            {showWineForm && (
+              <div className="bg-white shadow rounded-lg mb-6">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-medium text-gray-900">Create Wine</h2>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Wine Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={wineForm.name}
+                        onChange={(e) => setWineForm({...wineForm, name: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., ACEDIANO Monastrell"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Producer *
+                      </label>
+                      <input
+                        type="text"
+                        value={wineForm.producer}
+                        onChange={(e) => setWineForm({...wineForm, producer: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Bodega Acediano"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Region
+                      </label>
+                      <input
+                        type="text"
+                        value={wineForm.region}
+                        onChange={(e) => setWineForm({...wineForm, region: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Murcia"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Country *
+                      </label>
+                      <input
+                        type="text"
+                        value={wineForm.country}
+                        onChange={(e) => setWineForm({...wineForm, country: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., Spain"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Vintage
+                      </label>
+                      <input
+                        type="number"
+                        value={wineForm.vintage || ''}
+                        onChange={(e) => setWineForm({...wineForm, vintage: parseInt(e.target.value) || 0})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 2022"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Alcohol Content (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={wineForm.alcohol_content || ''}
+                        onChange={(e) => setWineForm({...wineForm, alcohol_content: parseFloat(e.target.value) || 0})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 14.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Bottle Size (ml)
+                      </label>
+                      <input
+                        type="number"
+                        value={wineForm.bottle_size_ml}
+                        onChange={(e) => setWineForm({...wineForm, bottle_size_ml: parseInt(e.target.value) || 750})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 750"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Category
+                      </label>
+                      <select
+                        value={wineForm.product_category}
+                        onChange={(e) => setWineForm({...wineForm, product_category: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select category</option>
+                        <option value="red">Red</option>
+                        <option value="white">White</option>
+                        <option value="rosé">Rosé</option>
+                        <option value="sparkling">Sparkling</option>
+                        <option value="dessert">Dessert</option>
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tasting Notes
+                      </label>
+                      <textarea
+                        value={wineForm.tasting_notes}
+                        onChange={(e) => setWineForm({...wineForm, tasting_notes: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={3}
+                        placeholder="e.g., Rich red wine with notes of blackberry and oak..."
+                      />
+                    </div>
+                    <div>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={wineForm.organic}
+                          onChange={(e) => setWineForm({...wineForm, organic: e.target.checked})}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Organic</span>
+                      </label>
+                    </div>
+                    <div>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={wineForm.biodynamic}
+                          onChange={(e) => setWineForm({...wineForm, biodynamic: e.target.checked})}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Biodynamic</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex space-x-3">
+                    <button
+                      onClick={createWine}
+                      disabled={!wineForm.name || !wineForm.producer || !wineForm.country}
+                      className={`px-4 py-2 rounded-md text-white font-medium ${
+                        !wineForm.name || !wineForm.producer || !wineForm.country
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-purple-600 hover:bg-purple-700'
+                      }`}
+                    >
+                      Create Wine
+                    </button>
+                    <button
+                      onClick={() => setShowWineForm(false)}
                       className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
                     >
                       Cancel
