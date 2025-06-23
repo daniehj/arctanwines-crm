@@ -730,7 +730,7 @@ def run_migrations():
             tables_created.append("wine_batch_costs")
             print("wine_batch_costs table created successfully")
         
-        # Check and create wine_batches table (if it doesn't exist)
+        # Check and update wine_batches table (add missing columns if table exists)
         wine_batches_exists = db.execute(text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables 
@@ -776,6 +776,62 @@ def run_migrations():
             
             tables_created.append("wine_batches")
             print("wine_batches table created successfully")
+        else:
+            print("wine_batches table exists, checking for missing columns...")
+            
+            # Check and add missing columns one by one
+            missing_columns = []
+            
+            # Helper function to check if column exists
+            def column_exists(table_name, column_name):
+                return db.execute(text(f"""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                        AND table_name = '{table_name}' 
+                        AND column_name = '{column_name}'
+                    );
+                """)).scalar()
+            
+            # List of columns that should exist
+            expected_columns = [
+                ('import_date', 'DATE'),
+                ('supplier_id', 'VARCHAR(36)'),
+                ('eur_exchange_rate', 'DECIMAL(10,6)'),
+                ('wine_cost_eur_cents', 'INTEGER'),
+                ('transport_cost_ore', 'INTEGER DEFAULT 0'),
+                ('customs_fee_ore', 'INTEGER DEFAULT 0'),
+                ('freight_forwarding_ore', 'INTEGER DEFAULT 0'),
+                ('fiken_sync_status', 'VARCHAR(20) DEFAULT \'pending\''),
+                ('active', 'BOOLEAN NOT NULL DEFAULT true')
+            ]
+            
+            for column_name, column_type in expected_columns:
+                if not column_exists('wine_batches', column_name):
+                    print(f"Adding missing column: {column_name}")
+                    db.execute(text(f"""
+                        ALTER TABLE wine_batches 
+                        ADD COLUMN {column_name} {column_type};
+                    """))
+                    missing_columns.append(column_name)
+            
+            if missing_columns:
+                print(f"Added missing columns to wine_batches: {', '.join(missing_columns)}")
+                tables_created.append(f"wine_batches (added columns: {', '.join(missing_columns)})")
+            else:
+                print("wine_batches table is up to date")
+            
+            # Add foreign key constraint for supplier_id if it doesn't exist
+            try:
+                if 'supplier_id' in missing_columns:
+                    db.execute(text("""
+                        ALTER TABLE wine_batches 
+                        ADD CONSTRAINT fk_wine_batches_supplier 
+                        FOREIGN KEY (supplier_id) REFERENCES suppliers(id);
+                    """))
+                    print("Added foreign key constraint for supplier_id")
+            except Exception as e:
+                print(f"Foreign key constraint may already exist or suppliers table not ready: {e}")
         
         db.commit()
         db.close()
