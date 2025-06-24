@@ -3,4 +3,5 @@ mangum==0.17.0
 boto3==1.34.0
 botocore==1.34.0
 sqlalchemy==1.4.48
-pg8000==1.29.0 
+pg8000==1.29.0
+alembic==1.13.0 
