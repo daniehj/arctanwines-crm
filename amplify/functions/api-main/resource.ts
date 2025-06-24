@@ -2,8 +2,8 @@ import { execSync } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineFunction } from "@aws-amplify/backend";
-import { DockerImage, Duration } from "aws-cdk-lib";
-import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
+import { Duration } from "aws-cdk-lib";
+import { Code, Function, Runtime, LayerVersion } from "aws-cdk-lib/aws-lambda";
 import { RestApi, LambdaIntegration, AuthorizationType, MethodLoggingLevel } from "aws-cdk-lib/aws-apigateway";
 import { PolicyStatement, Role, WebIdentityPrincipal, PolicyDocument, Effect } from "aws-cdk-lib/aws-iam";
 import { Vpc, SecurityGroup, Port, InterfaceVpcEndpoint, InterfaceVpcEndpointAwsService } from "aws-cdk-lib/aws-ec2";
@@ -78,18 +78,11 @@ export const apiMainFunction = defineFunction(
       memorySize: 1024,
       code: Code.fromAsset(functionDir, {
         bundling: {
-          image: DockerImage.fromRegistry("dummy"),
-          local: {
-            tryBundle(outputDir: string) {
-              // Install dependencies with platform targeting for Lambda
-              execSync(
-                `python3 -m pip install -r ${path.join(functionDir, "requirements.txt")} -t ${path.join(outputDir)} --platform manylinux2014_x86_64 --only-binary=:all:`
-              );
-              // Copy source files
-              execSync(`cp -r ${functionDir}/*.py ${path.join(outputDir)}`);
-              return true;
-            },
-          },
+          image: Runtime.PYTHON_3_12.bundlingImage,
+          command: [
+            "bash", "-c", 
+            "pip install -r requirements.txt -t /asset-output && cp *.py /asset-output/"
+          ],
         },
       }),
       environment: {
@@ -159,6 +152,18 @@ export const apiMainFunction = defineFunction(
         "rds:DescribeDBClusters"
       ],
       resources: ["*"]
+    }));
+
+    // Add Lambda invoke permissions for calling db-migrations function
+    lambdaFunction.addToRolePolicy(new PolicyStatement({
+      actions: [
+        "lambda:InvokeFunction"
+      ],
+      resources: [
+        `arn:aws:lambda:*:*:function:amplify-*-dbMigrations*`,
+        `arn:aws:lambda:*:*:function:*db-migrations*`,
+        `arn:aws:lambda:*:*:function:arctanwines-db-migrations*`
+      ]
     }));
 
     // Create REST API with AWS IAM authorization
