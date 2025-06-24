@@ -1004,6 +1004,181 @@ def run_migrations():
             tables_created.append("order_items")
             print("order_items table created successfully")
         
+        # Create tasting_outcomes table
+        tasting_outcomes_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'tasting_outcomes'
+            );
+        """)).scalar()
+        
+        if not tasting_outcomes_exists:
+            print("Creating tasting_outcomes table...")
+            
+            db.execute(text("""
+                CREATE TABLE tasting_outcomes (
+                    id VARCHAR(36) PRIMARY KEY,
+                    tasting_id VARCHAR(36) REFERENCES wine_tastings(id),
+                    customer_id VARCHAR(36) REFERENCES customers(id),
+                    outcome_type VARCHAR(50) NOT NULL,
+                    outcome_value_ore INTEGER DEFAULT 0,
+                    outcome_date DATE NOT NULL,
+                    notes TEXT,
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("tasting_outcomes")
+            print("tasting_outcomes table created successfully")
+        
+        # Create wine_tastings table
+        wine_tastings_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'wine_tastings'
+            );
+        """)).scalar()
+        
+        if not wine_tastings_exists:
+            print("Creating wine_tastings table...")
+            
+            db.execute(text("""
+                CREATE TABLE wine_tastings (
+                    id VARCHAR(36) PRIMARY KEY,
+                    event_name VARCHAR(255) NOT NULL,
+                    event_date DATE NOT NULL,
+                    event_time TIME,
+                    venue_type VARCHAR(50) NOT NULL,
+                    venue_name VARCHAR(255),
+                    venue_address TEXT,
+                    venue_cost_ore INTEGER DEFAULT 0,
+                    max_attendees INTEGER,
+                    actual_attendees INTEGER DEFAULT 0,
+                    event_type VARCHAR(50) NOT NULL,
+                    event_status VARCHAR(50) DEFAULT 'planned',
+                    target_customer_segment VARCHAR(100),
+                    marketing_objective TEXT,
+                    total_event_cost_ore INTEGER DEFAULT 0,
+                    estimated_revenue_impact_ore INTEGER DEFAULT 0,
+                    actual_revenue_impact_ore INTEGER DEFAULT 0,
+                    notes TEXT,
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("wine_tastings")
+            print("wine_tastings table created successfully")
+        
+        # Create tasting_attendees table
+        tasting_attendees_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'tasting_attendees'
+            );
+        """)).scalar()
+        
+        if not tasting_attendees_exists:
+            print("Creating tasting_attendees table...")
+            
+            db.execute(text("""
+                CREATE TABLE tasting_attendees (
+                    id VARCHAR(36) PRIMARY KEY,
+                    tasting_id VARCHAR(36) NOT NULL REFERENCES wine_tastings(id),
+                    customer_id VARCHAR(36) REFERENCES customers(id),
+                    attendee_name VARCHAR(255) NOT NULL,
+                    attendee_email VARCHAR(255),
+                    attendee_phone VARCHAR(50),
+                    attendee_type VARCHAR(50) NOT NULL,
+                    rsvp_status VARCHAR(50) DEFAULT 'invited',
+                    follow_up_required BOOLEAN DEFAULT false,
+                    post_event_interest_level INTEGER,
+                    potential_order_value_ore INTEGER DEFAULT 0,
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("tasting_attendees")
+            print("tasting_attendees table created successfully")
+        
+        # Create tasting_wines table
+        tasting_wines_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'tasting_wines'
+            );
+        """)).scalar()
+        
+        if not tasting_wines_exists:
+            print("Creating tasting_wines table...")
+            
+            db.execute(text("""
+                CREATE TABLE tasting_wines (
+                    id VARCHAR(36) PRIMARY KEY,
+                    tasting_id VARCHAR(36) NOT NULL REFERENCES wine_tastings(id),
+                    wine_id VARCHAR(36) REFERENCES wines(id),
+                    wine_name VARCHAR(255),
+                    wine_producer VARCHAR(255),
+                    wine_vintage INTEGER,
+                    bottles_used INTEGER NOT NULL DEFAULT 1,
+                    wine_source VARCHAR(50) NOT NULL,
+                    cost_per_bottle_ore INTEGER NOT NULL,
+                    tasting_order INTEGER,
+                    tasting_notes TEXT,
+                    customer_feedback JSONB,
+                    popularity_score DECIMAL(3,2),
+                    follow_up_orders INTEGER DEFAULT 0,
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("tasting_wines")
+            print("tasting_wines table created successfully")
+        
+        # Create tasting_costs table
+        tasting_costs_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'tasting_costs'
+            );
+        """)).scalar()
+        
+        if not tasting_costs_exists:
+            print("Creating tasting_costs table...")
+            
+            db.execute(text("""
+                CREATE TABLE tasting_costs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    tasting_id VARCHAR(36) NOT NULL REFERENCES wine_tastings(id),
+                    cost_category VARCHAR(50) NOT NULL,
+                    cost_description VARCHAR(255) NOT NULL,
+                    supplier_name VARCHAR(255),
+                    amount_ore INTEGER NOT NULL,
+                    cost_date DATE NOT NULL,
+                    invoice_reference VARCHAR(100),
+                    fiken_transaction_id INTEGER,
+                    cost_type VARCHAR(20) DEFAULT 'fixed',
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("tasting_costs")
+            print("tasting_costs table created successfully")
+        
         db.commit()
         db.close()
         
@@ -1854,6 +2029,389 @@ async def get_order_items(order_id: str):
         conn.close()
         
         return {"order_items": items}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+# Phase 4: Wine Tasting Event Management endpoints
+@app.get("/db/wine-tastings")
+async def list_wine_tastings():
+    """List all wine tasting events"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT wt.id, wt.event_name, wt.event_date, wt.event_time, wt.venue_type,
+                   wt.venue_name, wt.venue_address, wt.venue_cost_ore, wt.max_attendees,
+                   wt.actual_attendees, wt.event_type, wt.event_status, wt.target_customer_segment,
+                   wt.marketing_objective, wt.total_event_cost_ore, wt.estimated_revenue_impact_ore,
+                   wt.actual_revenue_impact_ore, wt.notes, wt.active, wt.created_at, wt.updated_at,
+                   COUNT(ta.id) as attendee_count,
+                   COUNT(tw.id) as wine_count,
+                   SUM(tc.amount_ore) as total_costs
+            FROM wine_tastings wt
+            LEFT JOIN tasting_attendees ta ON wt.id = ta.tasting_id AND ta.active = true
+            LEFT JOIN tasting_wines tw ON wt.id = tw.tasting_id AND tw.active = true
+            LEFT JOIN tasting_costs tc ON wt.id = tc.tasting_id AND tc.active = true
+            WHERE wt.active = true
+            GROUP BY wt.id, wt.event_name, wt.event_date, wt.event_time, wt.venue_type,
+                     wt.venue_name, wt.venue_address, wt.venue_cost_ore, wt.max_attendees,
+                     wt.actual_attendees, wt.event_type, wt.event_status, wt.target_customer_segment,
+                     wt.marketing_objective, wt.total_event_cost_ore, wt.estimated_revenue_impact_ore,
+                     wt.actual_revenue_impact_ore, wt.notes, wt.active, wt.created_at, wt.updated_at
+            ORDER BY wt.event_date DESC, wt.event_name
+        """)
+        
+        columns = ['id', 'event_name', 'event_date', 'event_time', 'venue_type',
+                  'venue_name', 'venue_address', 'venue_cost_ore', 'max_attendees',
+                  'actual_attendees', 'event_type', 'event_status', 'target_customer_segment',
+                  'marketing_objective', 'total_event_cost_ore', 'estimated_revenue_impact_ore',
+                  'actual_revenue_impact_ore', 'notes', 'active', 'created_at', 'updated_at',
+                  'attendee_count', 'wine_count', 'total_costs']
+        
+        tastings = []
+        for row in cursor.fetchall():
+            tasting = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    tasting[col] = value.isoformat()
+                elif isinstance(value, time):
+                    tasting[col] = str(value)
+                else:
+                    tasting[col] = value
+            
+            # Calculate ROI percentage
+            if tasting['total_event_cost_ore'] and tasting['total_event_cost_ore'] > 0:
+                revenue_impact = tasting['actual_revenue_impact_ore'] or 0
+                roi = ((revenue_impact - tasting['total_event_cost_ore']) / tasting['total_event_cost_ore']) * 100
+                tasting['roi_percentage'] = round(roi, 2)
+            else:
+                tasting['roi_percentage'] = 0
+            
+            tastings.append(tasting)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"wine_tastings": tastings}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/db/wine-tastings/{tasting_id}")
+async def get_wine_tasting_details(tasting_id: str):
+    """Get detailed wine tasting information including attendees, wines, costs, and outcomes"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        # Get tasting details
+        cursor.execute("""
+            SELECT id, event_name, event_date, event_time, venue_type, venue_name, venue_address,
+                   venue_cost_ore, max_attendees, actual_attendees, event_type, event_status,
+                   target_customer_segment, marketing_objective, total_event_cost_ore,
+                   estimated_revenue_impact_ore, actual_revenue_impact_ore, notes,
+                   active, created_at, updated_at
+            FROM wine_tastings
+            WHERE id = %s AND active = true
+        """, (tasting_id,))
+        
+        tasting_row = cursor.fetchone()
+        if not tasting_row:
+            raise HTTPException(status_code=404, detail="Wine tasting not found")
+        
+        tasting_columns = ['id', 'event_name', 'event_date', 'event_time', 'venue_type',
+                          'venue_name', 'venue_address', 'venue_cost_ore', 'max_attendees',
+                          'actual_attendees', 'event_type', 'event_status', 'target_customer_segment',
+                          'marketing_objective', 'total_event_cost_ore', 'estimated_revenue_impact_ore',
+                          'actual_revenue_impact_ore', 'notes', 'active', 'created_at', 'updated_at']
+        
+        tasting = {}
+        for i, col in enumerate(tasting_columns):
+            value = tasting_row[i]
+            if isinstance(value, (datetime, date)):
+                tasting[col] = value.isoformat()
+            else:
+                tasting[col] = value
+        
+        # Calculate ROI
+        if tasting['total_event_cost_ore'] and tasting['total_event_cost_ore'] > 0:
+            revenue_impact = tasting['actual_revenue_impact_ore'] or 0
+            roi = ((revenue_impact - tasting['total_event_cost_ore']) / tasting['total_event_cost_ore']) * 100
+            tasting['roi_percentage'] = round(roi, 2)
+        else:
+            tasting['roi_percentage'] = 0
+        
+        # Get attendees
+        cursor.execute("""
+            SELECT ta.id, ta.customer_id, c.name as customer_name, ta.attendee_name,
+                   ta.attendee_email, ta.attendee_phone, ta.attendee_type, ta.rsvp_status,
+                   ta.follow_up_required, ta.post_event_interest_level, ta.potential_order_value_ore,
+                   ta.created_at, ta.updated_at
+            FROM tasting_attendees ta
+            LEFT JOIN customers c ON ta.customer_id = c.id
+            WHERE ta.tasting_id = %s AND ta.active = true
+            ORDER BY ta.attendee_name
+        """, (tasting_id,))
+        
+        attendee_columns = ['id', 'customer_id', 'customer_name', 'attendee_name',
+                           'attendee_email', 'attendee_phone', 'attendee_type', 'rsvp_status',
+                           'follow_up_required', 'post_event_interest_level', 'potential_order_value_ore',
+                           'created_at', 'updated_at']
+        
+        attendees = []
+        for row in cursor.fetchall():
+            attendee = {}
+            for i, col in enumerate(attendee_columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    attendee[col] = value.isoformat()
+                else:
+                    attendee[col] = value
+            attendees.append(attendee)
+        
+        # Get wines
+        cursor.execute("""
+            SELECT tw.id, tw.wine_id, w.name as wine_name, w.producer as wine_producer,
+                   tw.wine_name as custom_wine_name, tw.wine_producer as custom_producer,
+                   tw.wine_vintage, tw.bottles_used, tw.wine_source, tw.cost_per_bottle_ore,
+                   tw.tasting_order, tw.tasting_notes, tw.customer_feedback, tw.popularity_score,
+                   tw.follow_up_orders, tw.created_at, tw.updated_at
+            FROM tasting_wines tw
+            LEFT JOIN wines w ON tw.wine_id = w.id
+            WHERE tw.tasting_id = %s AND tw.active = true
+            ORDER BY tw.tasting_order, tw.wine_name, tw.custom_wine_name
+        """, (tasting_id,))
+        
+        wine_columns = ['id', 'wine_id', 'wine_name', 'wine_producer', 'custom_wine_name',
+                       'custom_producer', 'wine_vintage', 'bottles_used', 'wine_source',
+                       'cost_per_bottle_ore', 'tasting_order', 'tasting_notes', 'customer_feedback',
+                       'popularity_score', 'follow_up_orders', 'created_at', 'updated_at']
+        
+        wines = []
+        for row in cursor.fetchall():
+            wine = {}
+            for i, col in enumerate(wine_columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    wine[col] = value.isoformat()
+                elif col == 'customer_feedback' and value:
+                    try:
+                        import json
+                        wine[col] = json.loads(value) if isinstance(value, str) else value
+                    except:
+                        wine[col] = value
+                else:
+                    wine[col] = value
+            
+            # Calculate total wine cost
+            wine['total_wine_cost_ore'] = wine['bottles_used'] * wine['cost_per_bottle_ore']
+            
+            # Use catalog wine name if custom name not provided
+            wine['display_name'] = wine['custom_wine_name'] or wine['wine_name']
+            wine['display_producer'] = wine['custom_producer'] or wine['wine_producer']
+            
+            wines.append(wine)
+        
+        # Get costs
+        cursor.execute("""
+            SELECT id, cost_category, cost_description, supplier_name, amount_ore,
+                   cost_date, invoice_reference, fiken_transaction_id, cost_type,
+                   created_at, updated_at
+            FROM tasting_costs
+            WHERE tasting_id = %s AND active = true
+            ORDER BY cost_date, cost_category
+        """, (tasting_id,))
+        
+        cost_columns = ['id', 'cost_category', 'cost_description', 'supplier_name', 'amount_ore',
+                       'cost_date', 'invoice_reference', 'fiken_transaction_id', 'cost_type',
+                       'created_at', 'updated_at']
+        
+        costs = []
+        for row in cursor.fetchall():
+            cost = {}
+            for i, col in enumerate(cost_columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    cost[col] = value.isoformat()
+                else:
+                    cost[col] = value
+            costs.append(cost)
+        
+        # Get outcomes
+        cursor.execute("""
+            SELECT to_.id, to_.customer_id, c.name as customer_name, to_.outcome_type,
+                   to_.outcome_value_ore, to_.outcome_date, to_.notes,
+                   to_.created_at, to_.updated_at
+            FROM tasting_outcomes to_
+            LEFT JOIN customers c ON to_.customer_id = c.id
+            WHERE to_.tasting_id = %s AND to_.active = true
+            ORDER BY to_.outcome_date DESC
+        """, (tasting_id,))
+        
+        outcome_columns = ['id', 'customer_id', 'customer_name', 'outcome_type',
+                          'outcome_value_ore', 'outcome_date', 'notes',
+                          'created_at', 'updated_at']
+        
+        outcomes = []
+        for row in cursor.fetchall():
+            outcome = {}
+            for i, col in enumerate(outcome_columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    outcome[col] = value.isoformat()
+                else:
+                    outcome[col] = value
+            outcomes.append(outcome)
+        
+        cursor.close()
+        conn.close()
+        
+        # Add related data to tasting
+        tasting['attendees'] = attendees
+        tasting['wines'] = wines
+        tasting['costs'] = costs
+        tasting['outcomes'] = outcomes
+        
+        # Add summary statistics
+        tasting['summary'] = {
+            'total_attendees': len(attendees),
+            'total_wines': len(wines),
+            'total_costs': sum(cost['amount_ore'] for cost in costs),
+            'total_wine_cost': sum(wine['total_wine_cost_ore'] for wine in wines),
+            'total_outcomes_value': sum(outcome['outcome_value_ore'] or 0 for outcome in outcomes),
+            'confirmed_attendees': len([a for a in attendees if a['rsvp_status'] in ['confirmed', 'attended']]),
+            'follow_up_required': len([a for a in attendees if a['follow_up_required']])
+        }
+        
+        return tasting
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/db/tasting-attendees")
+async def list_tasting_attendees():
+    """List all tasting attendees across all events"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT ta.id, ta.tasting_id, wt.event_name, ta.customer_id, c.name as customer_name,
+                   ta.attendee_name, ta.attendee_email, ta.attendee_phone, ta.attendee_type,
+                   ta.rsvp_status, ta.follow_up_required, ta.post_event_interest_level,
+                   ta.potential_order_value_ore, ta.active, ta.created_at, ta.updated_at
+            FROM tasting_attendees ta
+            LEFT JOIN wine_tastings wt ON ta.tasting_id = wt.id
+            LEFT JOIN customers c ON ta.customer_id = c.id
+            WHERE ta.active = true
+            ORDER BY wt.event_date DESC, ta.attendee_name
+        """)
+        
+        columns = ['id', 'tasting_id', 'event_name', 'customer_id', 'customer_name',
+                  'attendee_name', 'attendee_email', 'attendee_phone', 'attendee_type',
+                  'rsvp_status', 'follow_up_required', 'post_event_interest_level',
+                  'potential_order_value_ore', 'active', 'created_at', 'updated_at']
+        
+        attendees = []
+        for row in cursor.fetchall():
+            attendee = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    attendee[col] = value.isoformat()
+                else:
+                    attendee[col] = value
+            attendees.append(attendee)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"tasting_attendees": attendees}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/db/tasting-outcomes")
+async def list_tasting_outcomes():
+    """List all tasting outcomes with ROI analysis"""
+    try:
+        db_config = get_database_config()
+        
+        conn_params = {
+            'host': db_config['host'],
+            'port': int(db_config['port']),
+            'database': db_config['name'],
+            'user': db_config['username'],
+            'password': db_config['password']
+        }
+        
+        conn = pg8000.connect(**conn_params)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT to_.id, to_.tasting_id, wt.event_name, to_.customer_id, c.name as customer_name,
+                   to_.outcome_type, to_.outcome_value_ore, to_.outcome_date, to_.notes,
+                   wt.total_event_cost_ore, wt.event_date,
+                   to_.active, to_.created_at, to_.updated_at
+            FROM tasting_outcomes to_
+            LEFT JOIN wine_tastings wt ON to_.tasting_id = wt.id
+            LEFT JOIN customers c ON to_.customer_id = c.id
+            WHERE to_.active = true
+            ORDER BY to_.outcome_date DESC, to_.outcome_value_ore DESC
+        """)
+        
+        columns = ['id', 'tasting_id', 'event_name', 'customer_id', 'customer_name',
+                  'outcome_type', 'outcome_value_ore', 'outcome_date', 'notes',
+                  'total_event_cost_ore', 'event_date', 'active', 'created_at', 'updated_at']
+        
+        outcomes = []
+        for row in cursor.fetchall():
+            outcome = {}
+            for i, col in enumerate(columns):
+                value = row[i]
+                if isinstance(value, (datetime, date)):
+                    outcome[col] = value.isoformat()
+                else:
+                    outcome[col] = value
+            outcomes.append(outcome)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"tasting_outcomes": outcomes}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

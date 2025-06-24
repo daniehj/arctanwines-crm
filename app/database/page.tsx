@@ -39,9 +39,10 @@ export default function DatabaseDashboard() {
     { name: 'Low Stock Alerts (Phase 3)', path: '/db/inventory/low-stock', method: 'GET' },
     { name: 'List Wine Batch Costs (Phase 3)', path: '/db/wine-batch-costs', method: 'GET' },
     { name: 'List Order Items (Phase 3)', path: '/db/order-items', method: 'GET' },
+    { name: 'List Wine Tastings (Phase 4)', path: '/db/wine-tastings', method: 'GET' },
+    { name: 'List Tasting Attendees (Phase 4)', path: '/db/tasting-attendees', method: 'GET' },
+    { name: 'List Tasting Outcomes (Phase 4)', path: '/db/tasting-outcomes', method: 'GET' },
   ];
-
-
 
   const expectedSchema = [
     {
@@ -75,6 +76,27 @@ export default function DatabaseDashboard() {
     {
       table: 'order_items',
       columns: ['id', 'order_id', 'wine_batch_id', 'wine_id', 'quantity', 'unit_price_ore', 'total_price_ore', 'wine_name', 'producer', 'vintage', 'bottle_size_ml', 'discount_percentage', 'discount_ore', 'notes', 'active', 'created_at', 'updated_at']
+    },
+    // Phase 4: Tasting Event tables
+    {
+      table: 'wine_tastings',
+      columns: ['id', 'event_name', 'event_date', 'event_time', 'venue_type', 'venue_name', 'venue_address', 'venue_cost_ore', 'max_attendees', 'actual_attendees', 'event_type', 'event_status', 'target_customer_segment', 'marketing_objective', 'total_event_cost_ore', 'estimated_revenue_impact_ore', 'actual_revenue_impact_ore', 'notes', 'active', 'created_at', 'updated_at']
+    },
+    {
+      table: 'tasting_attendees',
+      columns: ['id', 'tasting_id', 'customer_id', 'attendee_name', 'attendee_email', 'attendee_phone', 'attendee_type', 'rsvp_status', 'follow_up_required', 'post_event_interest_level', 'potential_order_value_ore', 'active', 'created_at', 'updated_at']
+    },
+    {
+      table: 'tasting_wines',
+      columns: ['id', 'tasting_id', 'wine_id', 'wine_name', 'wine_producer', 'wine_vintage', 'bottles_used', 'wine_source', 'cost_per_bottle_ore', 'tasting_order', 'tasting_notes', 'customer_feedback', 'popularity_score', 'follow_up_orders', 'active', 'created_at', 'updated_at']
+    },
+    {
+      table: 'tasting_costs',
+      columns: ['id', 'tasting_id', 'cost_category', 'cost_description', 'supplier_name', 'amount_ore', 'cost_date', 'invoice_reference', 'fiken_transaction_id', 'cost_type', 'active', 'created_at', 'updated_at']
+    },
+    {
+      table: 'tasting_outcomes',
+      columns: ['id', 'tasting_id', 'customer_id', 'outcome_type', 'outcome_value_ore', 'outcome_date', 'notes', 'active', 'created_at', 'updated_at']
     }
   ];
 
@@ -170,6 +192,15 @@ export default function DatabaseDashboard() {
             break;
           case 'order_items':
             endpoint = '/db/order-items';
+            break;
+          case 'wine_tastings':
+            endpoint = '/db/wine-tastings';
+            break;
+          case 'tasting_attendees':
+            endpoint = '/db/tasting-attendees';
+            break;
+          case 'tasting_outcomes':
+            endpoint = '/db/tasting-outcomes';
             break;
           default:
             endpoint = `/db/${schema.table.replace('_', '-')}`;
