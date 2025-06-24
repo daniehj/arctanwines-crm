@@ -1179,6 +1179,64 @@ def run_migrations():
             tables_created.append("tasting_outcomes")
             print("tasting_outcomes table created successfully")
         
+        # Add missing columns to existing tables if needed
+        print("Checking for missing columns in Phase 4 tables...")
+        
+        # Helper function to add column if it doesn't exist
+        def safe_add_column(table_name, column_name, column_definition):
+            try:
+                # Check if column exists
+                result = db.execute(text(f"""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = '{table_name}' 
+                    AND column_name = '{column_name}'
+                    AND table_schema = 'public'
+                """)).fetchone()
+                
+                if not result:
+                    print(f"Adding missing column {column_name} to {table_name}")
+                    db.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"))
+                    return True
+                return False
+            except Exception as e:
+                print(f"Error adding column {column_name} to {table_name}: {e}")
+                return False
+        
+        # Add missing columns to tasting_wines table
+        missing_wine_columns = [
+            ("wine_name", "VARCHAR(255)"),
+            ("wine_producer", "VARCHAR(255)"),
+            ("wine_vintage", "INTEGER"),
+            ("tasting_order", "INTEGER"),
+            ("tasting_notes", "TEXT"),
+            ("customer_feedback", "JSONB"),
+            ("popularity_score", "DECIMAL(3,2)"),
+            ("follow_up_orders", "INTEGER DEFAULT 0")
+        ]
+        
+        for col_name, col_def in missing_wine_columns:
+            if safe_add_column("tasting_wines", col_name, col_def):
+                tables_created.append(f"tasting_wines.{col_name}")
+        
+        # Add missing columns to tasting_costs table  
+        missing_cost_columns = [
+            ("cost_category", "VARCHAR(50) NOT NULL DEFAULT 'general'"),
+            ("cost_description", "VARCHAR(255) NOT NULL DEFAULT 'Event cost'"),
+            ("supplier_name", "VARCHAR(255)"),
+            ("amount_ore", "INTEGER NOT NULL DEFAULT 0"),
+            ("cost_date", "DATE NOT NULL DEFAULT CURRENT_DATE"),
+            ("invoice_reference", "VARCHAR(100)"),
+            ("fiken_transaction_id", "INTEGER"),
+            ("cost_type", "VARCHAR(20) DEFAULT 'fixed'")
+        ]
+        
+        for col_name, col_def in missing_cost_columns:
+            if safe_add_column("tasting_costs", col_name, col_def):
+                tables_created.append(f"tasting_costs.{col_name}")
+        
+        print("Phase 4 column check completed")
+        
         db.commit()
         db.close()
         
