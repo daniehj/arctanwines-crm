@@ -654,7 +654,7 @@ def run_migrations():
     """Run database migrations"""
     try:
         db = get_db_session()
-        
+
         # Helper function to check if column exists - used throughout migration
         def column_exists(table_name, column_name):
             return db.execute(
@@ -669,7 +669,7 @@ def run_migrations():
             """
                 )
             ).scalar()
-        
+
         tables_created = []
 
         suppliers_exists = db.execute(
@@ -1337,47 +1337,7 @@ def run_migrations():
             tables_created.append("tasting_wines")
             print("tasting_wines table created successfully")
         else:
-            print("tasting_wines table exists, checking for missing columns...")
-
-            # Check and add missing columns for tasting_wines
-            tasting_wines_missing_columns = []
-
-            # List of columns that should exist in tasting_wines
-            expected_tasting_wines_columns = [
-                ("wine_id", "VARCHAR(36)"),
-                ("wine_name", "VARCHAR(255)"),
-                ("wine_producer", "VARCHAR(255)"),
-                ("wine_vintage", "INTEGER"),
-                ("bottles_used", "INTEGER NOT NULL DEFAULT 1"),
-                ("wine_source", "VARCHAR(50) NOT NULL DEFAULT 'inventory'"),
-                ("cost_per_bottle_ore", "INTEGER NOT NULL DEFAULT 0"),
-                ("tasting_order", "INTEGER"),
-                ("tasting_notes", "TEXT"),
-                ("customer_feedback", "JSONB"),
-                ("popularity_score", "DECIMAL(3,2)"),
-                ("follow_up_orders", "INTEGER DEFAULT 0"),
-                ("active", "BOOLEAN NOT NULL DEFAULT true"),
-                ("created_at", "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()"),
-                ("updated_at", "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()"),
-            ]
-
-            for column_name, column_type in expected_tasting_wines_columns:
-                if not column_exists("tasting_wines", column_name):
-                    print(f"Adding missing column: {column_name} to tasting_wines")
-                    db.execute(
-                        text(
-                            f"""
-                        ALTER TABLE tasting_wines 
-                        ADD COLUMN {column_name} {column_type};
-                    """
-                        )
-                    )
-                    tasting_wines_missing_columns.append(column_name)
-
-            if tasting_wines_missing_columns:
-                tables_created.append(
-                    f"tasting_wines (added missing columns: {', '.join(tasting_wines_missing_columns)})"
-                )
+            print("tasting_wines table already exists")
 
         # Create tasting_costs table
         tasting_costs_exists = db.execute(
@@ -1420,43 +1380,7 @@ def run_migrations():
             tables_created.append("tasting_costs")
             print("tasting_costs table created successfully")
         else:
-            print("tasting_costs table exists, checking for missing columns...")
-
-            # Check and add missing columns for tasting_costs
-            tasting_costs_missing_columns = []
-
-            # List of columns that should exist in tasting_costs
-            expected_tasting_costs_columns = [
-                ("cost_category", "VARCHAR(50) NOT NULL DEFAULT 'venue'"),
-                ("cost_description", "VARCHAR(255) NOT NULL DEFAULT 'Event cost'"),
-                ("supplier_name", "VARCHAR(255)"),
-                ("amount_ore", "INTEGER NOT NULL DEFAULT 0"),
-                ("cost_date", "DATE NOT NULL DEFAULT CURRENT_DATE"),
-                ("invoice_reference", "VARCHAR(100)"),
-                ("fiken_transaction_id", "INTEGER"),
-                ("cost_type", "VARCHAR(20) DEFAULT 'fixed'"),
-                ("active", "BOOLEAN NOT NULL DEFAULT true"),
-                ("created_at", "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()"),
-                ("updated_at", "TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()"),
-            ]
-
-            for column_name, column_type in expected_tasting_costs_columns:
-                if not column_exists("tasting_costs", column_name):
-                    print(f"Adding missing column: {column_name} to tasting_costs")
-                    db.execute(
-                        text(
-                            f"""
-                        ALTER TABLE tasting_costs 
-                        ADD COLUMN {column_name} {column_type};
-                    """
-                        )
-                    )
-                    tasting_costs_missing_columns.append(column_name)
-
-            if tasting_costs_missing_columns:
-                tables_created.append(
-                    f"tasting_costs (added missing columns: {', '.join(tasting_costs_missing_columns)})"
-                )
+            print("tasting_costs table already exists")
 
         db.commit()
         db.close()
