@@ -278,6 +278,37 @@ export default function DatabaseDashboard() {
     setIsRunningMigration(false);
   };
 
+  const runAlembicMigration = async () => {
+    setIsRunningMigration(true);
+    
+    try {
+      const response = await post({
+        apiName: 'arctanwines-crm-api',
+        path: '/migrate/upgrade',
+        options: {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      }).response;
+
+      const body = await response.body.json();
+      console.log('Alembic migration result:', body);
+      
+      // Refresh schema status after migration
+      setTimeout(() => {
+        checkSchemaStatus();
+      }, 1000);
+      
+      alert(`Alembic migration completed: ${(body as any)?.message || 'Migration successful'}`);
+    } catch (error: any) {
+      console.error('Alembic migration error:', error);
+      alert(`Alembic migration failed: ${error.message || error}`);
+    }
+    
+    setIsRunningMigration(false);
+  };
+
   const runAllTests = async () => {
     setTestResults([]);
     
@@ -390,17 +421,30 @@ export default function DatabaseDashboard() {
                       {pendingMigrations > 0 ? 'Action Required' : 'Up to Date'}
                     </p>
                   </div>
-                  <button
-                    onClick={runMigration}
-                    disabled={isRunningMigration || pendingMigrations === 0}
-                    className={`px-4 py-2 rounded-md text-white font-medium ${
-                      isRunningMigration || pendingMigrations === 0
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
-                  >
-                    {isRunningMigration ? 'Running...' : pendingMigrations > 0 ? 'Run Migration' : 'No Migration Needed'}
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={runMigration}
+                      disabled={isRunningMigration || pendingMigrations === 0}
+                      className={`px-4 py-2 rounded-md text-white font-medium text-sm ${
+                        isRunningMigration || pendingMigrations === 0
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-orange-600 hover:bg-orange-700'
+                      }`}
+                    >
+                      {isRunningMigration ? 'Running...' : 'Manual SQL Migration'}
+                    </button>
+                    <button
+                      onClick={runAlembicMigration}
+                      disabled={isRunningMigration}
+                      className={`px-4 py-2 rounded-md text-white font-medium text-sm ${
+                        isRunningMigration
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
+                    >
+                      {isRunningMigration ? 'Running...' : '🚀 Alembic Migration'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
