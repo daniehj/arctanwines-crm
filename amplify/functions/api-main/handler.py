@@ -654,7 +654,22 @@ def run_migrations():
     """Run database migrations"""
     try:
         db = get_db_session()
-
+        
+        # Helper function to check if column exists - used throughout migration
+        def column_exists(table_name, column_name):
+            return db.execute(
+                text(
+                    f"""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = '{table_name}' 
+                    AND column_name = '{column_name}'
+                );
+            """
+                )
+            ).scalar()
+        
         tables_created = []
 
         suppliers_exists = db.execute(
@@ -890,21 +905,6 @@ def run_migrations():
 
             # Check and add missing columns one by one
             missing_columns = []
-
-            # Helper function to check if column exists
-            def column_exists(table_name, column_name):
-                return db.execute(
-                    text(
-                        f"""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND table_name = '{table_name}' 
-                        AND column_name = '{column_name}'
-                    );
-                """
-                    )
-                ).scalar()
 
             # List of columns that should exist
             expected_columns = [
