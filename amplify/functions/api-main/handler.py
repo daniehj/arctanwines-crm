@@ -1,7 +1,5 @@
-import json
 import os
 import time
-import socket
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
@@ -9,8 +7,6 @@ import boto3
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import uuid
-import subprocess
-from pathlib import Path
 import pg8000
 from datetime import datetime, date
 from decimal import Decimal
@@ -650,50 +646,16 @@ async def create_wine_batch(request: Request):
 
 
 @app.post("/migrate/upgrade")
-async def upgrade_database_alembic():
-    """Run Alembic migrations (alembic upgrade head)"""
-    try:
-        # Use the current directory where alembic.ini is now located
-        current_dir = Path(__file__).parent
-        original_cwd = os.getcwd()
-        
-        try:
-            os.chdir(current_dir)
-            
-            # Run the Alembic upgrade command
-            result = subprocess.run(
-                ['python', '-m', 'alembic', 'upgrade', 'head'],
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
-            
-            if result.returncode == 0:
-                return {
-                    "status": "success",
-                    "message": "Database upgraded successfully via Alembic",
-                    "output": result.stdout,
-                    "command": "alembic upgrade head"
-                }
-            else:
-                raise HTTPException(
-                    status_code=500,
-                    detail={
-                        "message": "Alembic migration failed",
-                        "error": result.stderr,
-                        "output": result.stdout,
-                        "command": "alembic upgrade head"
-                    }
-                )
-        finally:
-            # Restore original working directory
-            os.chdir(original_cwd)
-            
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Alembic migration failed: {str(e)}"
-        )
+async def upgrade_database_redirect():
+    """Redirect migration requests to dedicated migration service"""
+    raise HTTPException(
+        status_code=501,
+        detail={
+            "message": "Migration functionality moved to dedicated service",
+            "redirect": "Use the db-migrations Lambda function instead",
+            "note": "Endpoint removed to avoid duplicate systems",
+        },
+    )
 
 
 # Suppliers endpoints

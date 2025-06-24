@@ -247,41 +247,13 @@ export default function DatabaseDashboard() {
     setIsCheckingSchema(false);
   };
 
-  const runMigration = async () => {
-    setIsRunningMigration(true);
-    
-    try {
-      const response = await post({
-        apiName: 'arctanwines-crm-api',
-        path: '/db/migrate',
-        options: {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      }).response;
-
-      const body = await response.body.json();
-      console.log('Migration result:', body);
-      
-      // Refresh schema status after migration
-      setTimeout(() => {
-        checkSchemaStatus();
-      }, 1000);
-      
-      alert(`Migration completed: ${(body as any)?.message || 'Migration successful'}`);
-    } catch (error: any) {
-      console.error('Migration error:', error);
-      alert(`Migration failed: ${error.message || error}`);
-    }
-    
-    setIsRunningMigration(false);
-  };
+  // Manual SQL migration removed - use Alembic only
 
   const runAlembicMigration = async () => {
     setIsRunningMigration(true);
     
     try {
+      // Try the dedicated db-migrations service first
       const response = await post({
         apiName: 'arctanwines-crm-api',
         path: '/migrate/upgrade',
@@ -298,12 +270,20 @@ export default function DatabaseDashboard() {
       // Refresh schema status after migration
       setTimeout(() => {
         checkSchemaStatus();
-      }, 1000);
+      }, 2000); // Give more time for migration to complete
       
       alert(`Alembic migration completed: ${(body as any)?.message || 'Migration successful'}`);
     } catch (error: any) {
       console.error('Alembic migration error:', error);
-      alert(`Alembic migration failed: ${error.message || error}`);
+      
+      // More specific error handling
+      if (error.response?.status === 501) {
+        alert('Migration system has been updated. Please use the dedicated migration service.');
+      } else if (error.response?.status === 404) {
+        alert('Migration endpoint not found. Please check if you are using the correct API path.');
+      } else {
+        alert(`Alembic migration failed: ${error.message || error}`);
+      }
     }
     
     setIsRunningMigration(false);
@@ -423,17 +403,6 @@ export default function DatabaseDashboard() {
                   </div>
                   <div className="flex space-x-2">
                     <button
-                      onClick={runMigration}
-                      disabled={isRunningMigration || pendingMigrations === 0}
-                      className={`px-4 py-2 rounded-md text-white font-medium text-sm ${
-                        isRunningMigration || pendingMigrations === 0
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-orange-600 hover:bg-orange-700'
-                      }`}
-                    >
-                      {isRunningMigration ? 'Running...' : 'Manual SQL Migration'}
-                    </button>
-                    <button
                       onClick={runAlembicMigration}
                       disabled={isRunningMigration}
                       className={`px-4 py-2 rounded-md text-white font-medium text-sm ${
@@ -442,7 +411,7 @@ export default function DatabaseDashboard() {
                           : 'bg-green-600 hover:bg-green-700'
                       }`}
                     >
-                      {isRunningMigration ? 'Running...' : '🚀 Alembic Migration'}
+                      {isRunningMigration ? 'Running...' : '🚀 Run Alembic Migration'}
                     </button>
                   </div>
                 </div>
