@@ -16,7 +16,15 @@ export const dbMigrationsFunction = defineFunction(
       runtime: Runtime.PYTHON_3_12,
       timeout: Duration.seconds(300),
       memorySize: 1024,
-      code: Code.fromAsset(functionDir),
+      code: Code.fromAsset(functionDir, {
+        bundling: {
+          image: Runtime.PYTHON_3_12.bundlingImage,
+          command: [
+            "bash", "-c", 
+            "pip install -r requirements.txt -t /asset-output && cp -r . /asset-output/"
+          ],
+        },
+      }),
       environment: {
         PYTHONPATH: '/var/task'
       }
