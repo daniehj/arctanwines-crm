@@ -1004,7 +1004,37 @@ def run_migrations():
             tables_created.append("order_items")
             print("order_items table created successfully")
         
-        # Create wine_tastings table FIRST (parent table)
+        # Create tasting_outcomes table
+        tasting_outcomes_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'tasting_outcomes'
+            );
+        """)).scalar()
+        
+        if not tasting_outcomes_exists:
+            print("Creating tasting_outcomes table...")
+            
+            db.execute(text("""
+                CREATE TABLE tasting_outcomes (
+                    id VARCHAR(36) PRIMARY KEY,
+                    tasting_id VARCHAR(36) REFERENCES wine_tastings(id),
+                    customer_id VARCHAR(36) REFERENCES customers(id),
+                    outcome_type VARCHAR(50) NOT NULL,
+                    outcome_value_ore INTEGER DEFAULT 0,
+                    outcome_date DATE NOT NULL,
+                    notes TEXT,
+                    active BOOLEAN NOT NULL DEFAULT true,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                );
+            """))
+            
+            tables_created.append("tasting_outcomes")
+            print("tasting_outcomes table created successfully")
+        
+        # Create wine_tastings table
         wine_tastings_exists = db.execute(text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables 
@@ -1044,7 +1074,7 @@ def run_migrations():
             
             tables_created.append("wine_tastings")
             print("wine_tastings table created successfully")
-
+        
         # Create tasting_attendees table
         tasting_attendees_exists = db.execute(text("""
             SELECT EXISTS (
@@ -1078,7 +1108,7 @@ def run_migrations():
             
             tables_created.append("tasting_attendees")
             print("tasting_attendees table created successfully")
-
+        
         # Create tasting_wines table
         tasting_wines_exists = db.execute(text("""
             SELECT EXISTS (
@@ -1115,7 +1145,7 @@ def run_migrations():
             
             tables_created.append("tasting_wines")
             print("tasting_wines table created successfully")
-
+        
         # Create tasting_costs table
         tasting_costs_exists = db.execute(text("""
             SELECT EXISTS (
@@ -1148,36 +1178,6 @@ def run_migrations():
             
             tables_created.append("tasting_costs")
             print("tasting_costs table created successfully")
-
-        # Create tasting_outcomes table LAST (references wine_tastings)
-        tasting_outcomes_exists = db.execute(text("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name = 'tasting_outcomes'
-            );
-        """)).scalar()
-        
-        if not tasting_outcomes_exists:
-            print("Creating tasting_outcomes table...")
-            
-            db.execute(text("""
-                CREATE TABLE tasting_outcomes (
-                    id VARCHAR(36) PRIMARY KEY,
-                    tasting_id VARCHAR(36) REFERENCES wine_tastings(id),
-                    customer_id VARCHAR(36) REFERENCES customers(id),
-                    outcome_type VARCHAR(50) NOT NULL,
-                    outcome_value_ore INTEGER DEFAULT 0,
-                    outcome_date DATE NOT NULL,
-                    notes TEXT,
-                    active BOOLEAN NOT NULL DEFAULT true,
-                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                );
-            """))
-            
-            tables_created.append("tasting_outcomes")
-            print("tasting_outcomes table created successfully")
         
         db.commit()
         db.close()
