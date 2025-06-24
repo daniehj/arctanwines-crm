@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineFunction } from "@aws-amplify/backend";
-import { Duration } from "aws-cdk-lib";
+import { Duration, DockerImage } from "aws-cdk-lib";
 import { Code, Function, Runtime, LayerVersion } from "aws-cdk-lib/aws-lambda";
 import { RestApi, LambdaIntegration, AuthorizationType, MethodLoggingLevel } from "aws-cdk-lib/aws-apigateway";
 import { PolicyStatement, Role, WebIdentityPrincipal, PolicyDocument, Effect } from "aws-cdk-lib/aws-iam";
@@ -78,11 +78,16 @@ export const apiMainFunction = defineFunction(
       memorySize: 1024,
       code: Code.fromAsset(functionDir, {
         bundling: {
-          image: Runtime.PYTHON_3_12.bundlingImage,
-          command: [
-            "bash", "-c", 
-            "pip install -r requirements.txt -t /asset-output && cp *.py /asset-output/"
-          ],
+          image: DockerImage.fromRegistry("dummy"),
+          local: {
+            tryBundle(outputDir: string) {
+              execSync(
+                `python3 -m pip install -r ${path.join(functionDir, "requirements.txt")} -t ${path.join(outputDir)} --platform manylinux2014_x86_64 --only-binary=:all:`
+              );
+              execSync(`cp -r ${functionDir}/* ${path.join(outputDir)}`);
+              return true;
+            },
+          },
         },
       }),
       environment: {
