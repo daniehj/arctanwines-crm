@@ -95,13 +95,29 @@ def get_ssm_parameter(parameter_name):
 
 
 def get_database_url():
-    """Get database URL from SSM parameters"""
+    """Get database URL from environment variables or SSM parameters"""
     # For local development, check environment variable first
     local_db_url = os.environ.get("DATABASE_URL")
     if local_db_url:
         print(f"Using local database URL: {local_db_url}")
         return local_db_url
 
+    # Check for direct environment variables (set by CDK)
+    db_host = os.environ.get("DATABASE_HOST")
+    db_port = os.environ.get("DATABASE_PORT", "5432")
+    db_name = os.environ.get("DATABASE_NAME")
+    db_user = os.environ.get("DATABASE_USERNAME")
+    db_password = os.environ.get("DATABASE_PASSWORD")
+
+    if all([db_host, db_name, db_user, db_password]):
+        print(
+            f"Using database configuration from environment variables: {db_host}:{db_port}/{db_name}"
+        )
+        return (
+            f"postgresql+pg8000://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        )
+
+    # Fallback to SSM parameters
     try:
         db_host = get_ssm_parameter("database/host")
         db_port = get_ssm_parameter("database/port") or "5432"
