@@ -2,7 +2,7 @@
 
 [alembic]
 # path to migration scripts
-script_location = alembic_env
+script_location = ${script_location}
 
 # template used to generate migration file names; The default value is %%(rev)s_%%(slug)s
 # Uncomment the line below if you want the files to be prepended with date and time
@@ -14,9 +14,9 @@ prepend_sys_path = .
 
 # timezone to use when rendering the date within the migration file
 # as well as the filename.
-# If specified, requires the python-dateutil library that can be
-# installed by adding `alembic[tz]` to the pip requirements
-# string value is passed to dateutil.tz.gettz()
+# If specified, requires the python>=3.9 or backports.zoneinfo library.
+# Any required deps can installed by adding `alembic[tz]` to the pip requirements
+# string value is passed to ZoneInfo()
 # leave blank for localtime
 # timezone =
 
@@ -33,19 +33,21 @@ prepend_sys_path = .
 # versions/ directory
 # sourceless = false
 
-# version number format
-version_num_format = %%04d
+# version location specification; This defaults
+# to ${script_location}/versions.  When using multiple version
+# directories, initial revisions must be specified with --version-path.
+# The path separator used here should be the separator specified by "version_path_separator" below.
+# version_locations = %(here)s/bar:%(here)s/bat:${script_location}/versions
 
 # version path separator; As mentioned above, this is the character used to split
-# version_locations. The default within new alembic.ini files is "os", which uses
-# os.pathsep. If this key is omitted entirely, it falls back to the legacy
-# behavior of splitting on spaces and/or commas.
+# version_locations. The default within new alembic.ini files is "os", which uses os.pathsep.
+# If this key is omitted entirely, it falls back to the legacy behavior of splitting on spaces and/or commas.
 # Valid values for version_path_separator are:
 #
 # version_path_separator = :
 # version_path_separator = ;
 # version_path_separator = space
-version_path_separator = os
+version_path_separator = os  # Use os.pathsep. Default configuration used for new projects.
 
 # set to 'true' to search source files recursively
 # in each "version_locations" directory
@@ -109,4 +111,4 @@ formatter = generic
 
 [formatter_generic]
 format = %(levelname)-5.5s [%(name)s] %(message)s
-datefmt = %H:%M:%S 
+datefmt = %H:%M:%S
