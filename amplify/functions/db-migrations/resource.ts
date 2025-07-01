@@ -2,7 +2,7 @@ import { defineFunction } from '@aws-amplify/backend';
 import { Duration, DockerImage } from 'aws-cdk-lib';
 import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { Vpc, SecurityGroup, Port, InterfaceVpcEndpoint, InterfaceVpcEndpointAwsService } from 'aws-cdk-lib/aws-ec2';
+import { Vpc, SecurityGroup, Port } from 'aws-cdk-lib/aws-ec2';
 import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,48 +34,8 @@ export const dbMigrationsFunction = defineFunction(
       "Allow db-migrations Lambda to connect to Aurora PostgreSQL"
     );
 
-    // Create a security group for VPC endpoints
-    const vpcEndpointSecurityGroup = new SecurityGroup(scope, "db-migrations-vpc-endpoint-sg", {
-      vpc: vpc,
-      description: "Security group for VPC endpoints to access AWS services",
-      allowAllOutbound: false
-    });
-
-    // Allow HTTPS traffic from Lambda to VPC endpoints
-    vpcEndpointSecurityGroup.addIngressRule(
-      lambdaSecurityGroup,
-      Port.tcp(443),
-      "Allow Lambda to access VPC endpoints"
-    );
-
-    // Allow Lambda to access VPC endpoints (HTTPS)
-    lambdaSecurityGroup.addEgressRule(
-      vpcEndpointSecurityGroup,
-      Port.tcp(443),
-      "Allow Lambda to access AWS services via VPC endpoints"
-    );
-
-    // Create VPC endpoint for Secrets Manager
-    const secretsManagerVpcEndpoint = new InterfaceVpcEndpoint(scope, "db-migrations-secrets-manager-vpc-endpoint", {
-      vpc: vpc,
-      service: InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-      subnets: {
-        subnets: vpc.privateSubnets
-      },
-      securityGroups: [vpcEndpointSecurityGroup],
-      privateDnsEnabled: true
-    });
-
-    // Create VPC endpoint for SSM Parameter Store
-    const ssmVpcEndpoint = new InterfaceVpcEndpoint(scope, "db-migrations-ssm-vpc-endpoint", {
-      vpc: vpc,
-      service: InterfaceVpcEndpointAwsService.SSM,
-      subnets: {
-        subnets: vpc.privateSubnets
-      },
-      securityGroups: [vpcEndpointSecurityGroup],
-      privateDnsEnabled: true
-    });
+    // The VPC endpoints for Secrets Manager and SSM are already created by api-main function
+    // Lambda functions in the same VPC will use the existing endpoints automatically
 
     // Create the Python Lambda function
     const lambdaFunction = new Function(scope, 'db-migrations', {
