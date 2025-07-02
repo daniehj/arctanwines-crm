@@ -3,7 +3,6 @@ import { Duration, DockerImage } from 'aws-cdk-lib';
 import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Vpc, SecurityGroup, Port } from 'aws-cdk-lib/aws-ec2';
-import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,13 +37,6 @@ export const dbMigrationsFunction = defineFunction(
     // The VPC endpoints for Secrets Manager and SSM are already created by api-main function
     // Lambda functions in the same VPC will use the existing endpoints automatically
 
-    // Reference existing SSM parameters for database configuration
-    const dbHost = StringParameter.fromStringParameterName(scope, 'db-host-param', '/amplify/arctanwines/database/host');
-    const dbPort = StringParameter.fromStringParameterName(scope, 'db-port-param', '/amplify/arctanwines/database/port');
-    const dbName = StringParameter.fromStringParameterName(scope, 'db-name-param', '/amplify/arctanwines/database/name');
-    const dbUser = StringParameter.fromStringParameterName(scope, 'db-user-param', '/amplify/arctanwines/database/username');
-    const dbPassword = StringParameter.fromStringParameterName(scope, 'db-password-param', '/amplify/arctanwines/database/password');
-
     // Create the Python Lambda function
     const lambdaFunction = new Function(scope, 'db-migrations', {
       handler: 'handler.handler',
@@ -55,12 +47,6 @@ export const dbMigrationsFunction = defineFunction(
       environment: {
         ENVIRONMENT: "production",
         PYTHONPATH: '/var/task',
-        // Database configuration environment variables to bypass SSM lookup
-        DATABASE_HOST: dbHost.stringValue,
-        DATABASE_PORT: dbPort.stringValue,
-        DATABASE_NAME: dbName.stringValue,
-        DATABASE_USERNAME: dbUser.stringValue,
-        DATABASE_PASSWORD: dbPassword.stringValue,
       },
       // Configure VPC access to connect to Aurora
       vpc: vpc,
