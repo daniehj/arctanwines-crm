@@ -2,7 +2,6 @@ import { defineFunction } from '@aws-amplify/backend';
 import { Duration, DockerImage } from 'aws-cdk-lib';
 import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { Vpc, SecurityGroup, Port } from 'aws-cdk-lib/aws-ec2';
 import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,40 +10,7 @@ const functionDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const dbMigrationsFunction = defineFunction(
   (scope) => {
-    // Import the existing VPC and subnets by ID with CIDR block
-    const vpc = Vpc.fromVpcAttributes(scope, "DbMigrationsVpc", {
-      vpcId: "vpc-05c4cb9498d87e69d",
-      vpcCidrBlock: "172.31.0.0/16",
-      availabilityZones: ["eu-west-1a", "eu-west-1b", "eu-west-1c"],
-      privateSubnetIds: ["subnet-086978f4e594eb9ae", "subnet-095a97ab243096c24", "subnet-0b11a013be429912f"]
-    });
-
-    // Create a security group for the Lambda function  
-    const lambdaSecurityGroup = new SecurityGroup(scope, "db-migrations-lambda-sg", {
-      vpc: vpc,
-      description: "Security group for db-migrations Lambda function to access Aurora and AWS services",
-      allowAllOutbound: true
-    });
-
-    // Get reference to the existing Aurora security group and allow connection
-    const auroraSecurityGroup = SecurityGroup.fromSecurityGroupId(scope, "db-migrations-aurora-sg", "sg-0c0d0e7a3600397fb");
-    auroraSecurityGroup.addIngressRule(
-      lambdaSecurityGroup,
-      Port.tcp(5432),
-      "Allow db-migrations Lambda to connect to Aurora PostgreSQL"
-    );
-
-    // Reference the VPC endpoint security group created by api-main function
-    // and add db-migrations Lambda to the allowed sources for HTTPS access
-    const vpcEndpointSecurityGroup = SecurityGroup.fromLookupByName(scope, "vpc-endpoint-sg-lookup", "vpc-endpoint-sg", vpc);
-    vpcEndpointSecurityGroup.addIngressRule(
-      lambdaSecurityGroup,
-      Port.tcp(443),
-      "Allow db-migrations Lambda to access VPC endpoints"
-    );
-
-    // The VPC endpoints for Secrets Manager and SSM are already created by api-main function
-    // Lambda functions in the same VPC will use the existing endpoints automatically
+    // VPC configuration will be done manually in AWS console to avoid CDK context issues
 
     // Create the Python Lambda function
     const lambdaFunction = new Function(scope, 'db-migrations', {
@@ -57,25 +23,10 @@ export const dbMigrationsFunction = defineFunction(
         ENVIRONMENT: "production",
         PYTHONPATH: '/var/task',
       },
-      // Configure VPC access to connect to Aurora
-      vpc: vpc,
-      vpcSubnets: {
-        subnets: vpc.privateSubnets
-      },
-      securityGroups: [lambdaSecurityGroup]
+      // VPC configuration will be added manually in AWS console
     });
 
-    // Add VPC execution permissions for Lambda
-    lambdaFunction.addToRolePolicy(new PolicyStatement({
-      actions: [
-        "ec2:CreateNetworkInterface",
-        "ec2:DescribeNetworkInterfaces",
-        "ec2:DeleteNetworkInterface",
-        "ec2:AttachNetworkInterface",
-        "ec2:DetachNetworkInterface"
-      ],
-      resources: ["*"]
-    }));
+    // VPC execution permissions will be added automatically when VPC is configured manually
 
     // Add SSM permissions to read configuration parameters
     lambdaFunction.addToRolePolicy(new PolicyStatement({
