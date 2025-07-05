@@ -28,20 +28,19 @@ export const dbMigrationsFunction = defineFunction(
 
     // Get reference to the existing Aurora security group and allow connection
     const auroraSecurityGroup = SecurityGroup.fromSecurityGroupId(scope, "db-migrations-aurora-sg", "sg-0c0d0e7a3600397fb");
-    
-    // Allow PostgreSQL connection to Aurora
     auroraSecurityGroup.addIngressRule(
       lambdaSecurityGroup,
       Port.tcp(5432),
       "Allow db-migrations Lambda to connect to Aurora PostgreSQL"
     );
 
-    // Also allow HTTPS access - this might help with VPC endpoint access
-    // since VPC endpoints often share security groups with other resources
-    auroraSecurityGroup.addIngressRule(
+    // Reference the VPC endpoint security group created by api-main function
+    // and add db-migrations Lambda to the allowed sources for HTTPS access
+    const vpcEndpointSecurityGroup = SecurityGroup.fromLookupByName(scope, "vpc-endpoint-sg-lookup", "vpc-endpoint-sg", vpc);
+    vpcEndpointSecurityGroup.addIngressRule(
       lambdaSecurityGroup,
       Port.tcp(443),
-      "Allow db-migrations Lambda HTTPS access (for VPC endpoints)"
+      "Allow db-migrations Lambda to access VPC endpoints"
     );
 
     // The VPC endpoints for Secrets Manager and SSM are already created by api-main function
